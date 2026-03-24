@@ -1,0 +1,54 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                Int      @id @default(autoincrement())
+  email             String   @unique
+  password          String
+  name              String
+  role              String   // "BUYER", "SELLER"
+  companyName       String
+  jobTitle          String   // 직함
+  phone             String   // 연락처
+  
+  userType          String?  // VC, AC, 바이어, 기타
+  userTypeDetail    String?  
+  preferredPartners String?  // 선호 파트너 설명
+
+  timeSlots         TimeSlot[]
+  meetingsAsBuyer   Meeting[] @relation("BuyerMeetings")
+  meetingsAsSeller  Meeting[] @relation("SellerMeetings")
+  createdAt         DateTime @default(now())
+}
+
+model TimeSlot {
+  id          Int      @id @default(autoincrement())
+  startTime   DateTime
+  endTime     DateTime
+  description String?  // 미팅 참고사항
+  status      String   @default("OPEN")
+  buyer       User     @relation(fields: [buyerId], references: [id])
+  buyerId     Int
+  meetings    Meeting[]
+}
+
+model Meeting {
+  id         Int      @id @default(autoincrement())
+  status     String   @default("PENDING")
+  proposal   String?  // 셀러 제안 메시지
+  timeSlot   TimeSlot @relation(fields: [timeSlotId], references: [id])
+  timeSlotId Int
+  buyer      User     @relation("BuyerMeetings", fields: [buyerId], references: [id])
+  buyerId    Int
+  seller     User     @relation("SellerMeetings", fields: [sellerId], references: [id])
+  sellerId   Int
+  createdAt  DateTime @default(now())
+}
