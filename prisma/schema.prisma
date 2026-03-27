@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -41,14 +42,15 @@ model TimeSlot {
 }
 
 model Meeting {
-  id         Int      @id @default(autoincrement())
-  status     String   @default("PENDING")
-  proposal   String?  // 셀러 제안 메시지
-  timeSlot   TimeSlot @relation(fields: [timeSlotId], references: [id])
-  timeSlotId Int
-  buyer      User     @relation("BuyerMeetings", fields: [buyerId], references: [id])
-  buyerId    Int
-  seller     User     @relation("SellerMeetings", fields: [sellerId], references: [id])
-  sellerId   Int
-  createdAt  DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  status           String   @default("PENDING")
+  proposal         String?  // 셀러 제안 메시지
+  rejectionReason  String?  // <-- 이 줄을 새로 추가하세요! (거절 사유 저장용)
+  timeSlot         TimeSlot @relation(fields: [timeSlotId], references: [id])
+  timeSlotId       Int
+  buyer            User     @relation("BuyerMeetings", fields: [buyerId], references: [id])
+  buyerId          Int
+  seller           User     @relation("SellerMeetings", fields: [sellerId], references: [id])
+  sellerId         Int
+  createdAt        DateTime @default(now())
 }
