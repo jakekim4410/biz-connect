@@ -1,70 +1,85 @@
-// app/page.tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function Home() {
-  const session = await getServerSession(authOptions);
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-  // 이미 로그인된 사용자는 자동으로 각자의 대시보드로 이동
-  if (session) {
-    if ((session.user as any).role === "BUYER") redirect("/buyer");
-    if ((session.user as any).role === "SELLER") redirect("/seller");
-  }
+export default function LandingPage() {
+  const { data: session } = useSession();
+  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (mounted && session) {
+      const role = (session.user as any)?.role;
+      if (role === "ADMIN") router.push("/admin");
+      else if (role === "BUYER") router.push("/buyer");
+      else if (role === "SELLER") router.push("/seller");
+    }
+  }, [mounted, session, router]);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-slate-900 font-sans">
-      {/* 배경 장식 요소 */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-3xl opacity-50"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-50 rounded-full blur-3xl opacity-50"></div>
+    <div className="min-h-[calc(100vh-4rem)] bg-[#fcfdfe] font-sans relative overflow-x-hidden flex flex-col items-center justify-center py-10">
+      {/* 배경 데코 */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-50/20 via-transparent to-transparent pointer-events-none"></div>
+
+      <div className="relative z-10 w-full max-w-5xl px-6 flex flex-col items-center">
+        <div className="text-center space-y-6 md:space-y-8 mb-12 w-full">
+          <div className="inline-block px-3 py-1 border border-slate-200 rounded-full bg-white/50">
+            <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Professional Matching Platform</p>
+          </div>
+          
+          {/* 🔹 중앙 로고: 모바일 최적화 크기 (text-5xl) */}
+          <h1 className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter leading-none break-keep">
+            <span className="text-[#111827]">Biz</span>
+            <span className="text-[#2563eb]">Connect</span>
+          </h1>
+          
+          <div className="max-w-2xl mx-auto space-y-4 px-2">
+            <h2 className="text-xl md:text-3xl font-medium text-slate-700 tracking-tight break-keep">
+              비즈니스의 본질은 <span className="font-black text-slate-900">연결</span>에 있습니다.
+            </h2>
+            <p className="text-slate-400 text-xs md:text-lg font-medium leading-relaxed break-keep">
+              BizConnect는 복잡한 절차 없이 당신의 비즈니스 시간을 최적화합니다.
+            </p>
+          </div>
+        </div>
+
+        {/* 핵심 가치 섹션 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-12 w-full max-w-4xl mb-12 px-4">
+            <div className="space-y-2 border-l-2 border-blue-600 pl-6">
+                <p className="text-blue-600 font-black text-xs md:text-sm uppercase italic">Direct</p>
+                <p className="text-slate-800 font-bold text-sm md:text-base">빠른 연결</p>
+                <p className="text-slate-400 text-[11px]">중개 과정 없이 바이어에게 직접 미팅을 예약하세요.</p>
+            </div>
+            <div className="space-y-2 border-l-2 border-blue-600 pl-6">
+                <p className="text-blue-600 font-black text-xs md:text-sm uppercase italic">Real-time</p>
+                <p className="text-slate-800 font-bold text-sm md:text-base">실시간 현황 관리</p>
+                <p className="text-slate-400 text-[11px]">모든 매칭 현황을 한눈에 파악하고 즉시 처리합니다.</p>
+            </div>
+            <div className="space-y-2 border-l-2 border-blue-600 pl-6">
+                <p className="text-blue-600 font-black text-xs md:text-sm uppercase italic">Verified</p>
+                <p className="text-slate-800 font-bold text-sm md:text-base">명확한 파트너 정보</p>
+                <p className="text-slate-400 text-[11px]">상호간의 정보를 명확하게 파악하여 매칭 성공률을 높입니다.</p>
+            </div>
+        </div>
+
+        {!session && (
+          <div className="flex flex-col items-center gap-4 w-full max-w-[280px] md:max-w-xs">
+            <Link href="/login" className="w-full py-4 bg-[#111827] text-white rounded-2xl font-black text-center hover:bg-blue-700 transition-all shadow-lg active:scale-95">로그인</Link>
+            <Link href="/register" className="w-full py-4 bg-white text-slate-900 border border-slate-200 rounded-2xl font-black text-center hover:border-blue-600 hover:text-blue-600 transition-all">회원가입</Link>
+          </div>
+        )}
       </div>
 
-      <main className="max-w-xl w-full text-center space-y-12">
-        {/* 타이틀 섹션 */}
-        <section className="space-y-4">
-          <div className="inline-block px-4 py-1.5 mb-2 text-[10px] font-black tracking-[0.2em] text-blue-600 uppercase bg-blue-50 rounded-full border border-blue-100">
-            Smart Matching Engine
-          </div>
-          <h1 className="text-7xl font-black tracking-tighter text-slate-900">
-            Biz<span className="text-blue-600 underline decoration-blue-200 underline-offset-8">Connect</span>
-          </h1>
-          <p className="text-lg text-slate-400 font-medium leading-relaxed">
-            최고의 비즈니스 파트너십을 연결합니다.
-          </p>
-        </section>
-
-        {/* 액션 버튼 섹션 */}
-        <section className="flex flex-col gap-4">
-          <a 
-            href="/login" 
-            className="w-full bg-slate-900 text-white py-5 rounded-[24px] font-black text-lg shadow-2xl shadow-slate-200 hover:bg-blue-600 hover:shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2 group"
-          >
-            로그인하여 시작하기
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </a>
-          
-          <div className="flex items-center gap-4 py-2">
-            <div className="h-[1px] bg-slate-100 flex-1"></div>
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">New to BizConnect?</span>
-            <div className="h-[1px] bg-slate-100 flex-1"></div>
-          </div>
-
-          <a 
-            href="/register" 
-            className="w-full bg-white text-slate-900 border-2 border-slate-100 py-5 rounded-[24px] font-black text-lg hover:border-blue-200 hover:bg-blue-50 transition-all active:scale-95"
-          >
-            회원가입
-          </a>
-        </section>
-
-        {/* 푸터 섹션 */}
-        <footer className="pt-12 text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em]">
-          © 2026 BizConnect Matching Platform. All rights reserved.
-        </footer>
-      </main>
+      <footer className="mt-12 opacity-40 text-center">
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.3em]">
+          &copy; 2026 BizConnect. Standard Business Platform.
+        </p>
+      </footer>
     </div>
   );
 }

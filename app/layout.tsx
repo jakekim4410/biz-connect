@@ -2,6 +2,7 @@ import "./style.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
 import LogoutButton from "../components/LogoutButton";
+import { NextAuthProvider } from "../components/NextAuthProvider";
 
 export default async function RootLayout({
   children,
@@ -12,65 +13,63 @@ export default async function RootLayout({
 
   return (
     <html lang="ko">
-      {/* font-sans를 통해 style.css에 정의된 Pretendard 서체를 기본으로 사용합니다 */}
       <body className="antialiased font-sans bg-[#f4f7fa]">
-        <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 p-3 md:p-4 sticky top-0 z-50 text-slate-900">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-2 md:gap-0">
-            
-            {/* --- 로고 영역 (모바일에서 좌측 상단 고정) --- */}
-            <div className="flex justify-between items-center w-full md:w-auto">
-              <a href="/" className="text-blue-600 font-black text-xl md:text-2xl tracking-tighter hover:opacity-80 transition-all">
-                BizConnect
-              </a>
+        <NextAuthProvider>
+          {/* 🔹 상단 헤더: 모든 페이지 공통 적용 */}
+          <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 sticky top-0 z-50 text-slate-900">
+            <div className="max-w-6xl mx-auto px-4 h-full flex justify-between items-center">
               
-              {/* 모바일 대시보드 숏컷 태그 (모바일에서만 보임) */}
-              <div className="flex md:hidden items-center gap-2">
+              {/* 로고 및 뱃지 영역 */}
+              <div className="flex items-center gap-2 md:gap-3">
+                <a href="/" className="font-black text-xl md:text-2xl tracking-tighter hover:opacity-80 transition-all flex items-center shrink-0">
+                  <span className="text-[#111827]">Biz</span>
+                  <span className="text-[#2563eb]">Connect</span>
+                </a>
+                
+                {/* 🔹 모바일/PC 모두 보이는 뱃지 (hidden 제거) */}
                 {session && (session.user as any).role === "BUYER" && (
-                  <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">BUYER</span>
+                  <span className="text-[8px] md:text-[10px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md uppercase border border-blue-100 shrink-0">Buyer</span>
                 )}
                 {session && (session.user as any).role === "SELLER" && (
-                  <span className="text-[10px] font-black bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">SELLER</span>
-                )}
-              </div>
-            </div>
-
-            {/* --- 메뉴 및 사용자 정보 영역 (모바일에서는 로고 아래 배치되어 겹침 방지) --- */}
-            <div className="flex justify-between md:justify-end items-center w-full md:w-auto gap-4 md:gap-8 border-t md:border-none pt-2 md:pt-0">
-              
-              {/* 대시보드 링크 */}
-              <div className="flex gap-4 items-center">
-                {session && (session.user as any).role === "BUYER" && (
-                  <a href="/buyer" className="text-xs md:text-sm font-bold text-slate-500 hover:text-blue-600 transition-all">바이어 대시보드</a>
-                )}
-                {session && (session.user as any).role === "SELLER" && (
-                  <a href="/seller" className="text-xs md:text-sm font-bold text-slate-500 hover:text-blue-600 transition-all">셀러 대시보드</a>
+                  <span className="text-[8px] md:text-[10px] font-black bg-emerald-50 text-emerald-600 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md uppercase border border-emerald-100 shrink-0">Seller</span>
                 )}
               </div>
 
-              {/* 유저 로그인 정보 및 로그아웃 */}
-              <div className="flex items-center gap-3">
-                {session ? (
-                  <div className="flex items-center gap-3 text-[11px] md:text-sm">
-                    <span className="font-bold text-slate-700 truncate max-w-[80px] md:max-w-none">
-                      <span className="text-blue-600 hidden md:inline text-[8px] mr-1">●</span>
-                      {session.user?.name}님
-                    </span>
-                    <LogoutButton />
+              {/* 메뉴 및 사용자 정보 */}
+              <div className="flex items-center gap-3 md:gap-6">
+                {/* 대시보드 링크 (모바일에서는 아이콘이나 텍스트 크기 조절 권장, 여기서는 텍스트 유지) */}
+                {session && (
+                  <div className="hidden xs:flex gap-3">
+                    {(session.user as any).role === "BUYER" ? (
+                      <a href="/buyer" className="text-[10px] md:text-sm font-bold text-slate-500 hover:text-blue-600">바이어 대시보드</a>
+                    ) : (
+                      <a href="/seller" className="text-[10px] md:text-sm font-bold text-slate-500 hover:text-blue-600">셀러 대시보드</a>
+                    )}
                   </div>
-                ) : (
-                  <a href="/login" className="text-xs md:text-sm font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                    로그인
-                  </a>
                 )}
+
+                <div className="flex items-center gap-2">
+                  {session ? (
+                    <div className="flex items-center gap-2 text-[11px] md:text-sm">
+                      <span className="font-bold text-slate-700 hidden sm:inline">
+                        {session.user?.name}님
+                      </span>
+                      <LogoutButton />
+                    </div>
+                  ) : (
+                    <a href="/login" className="text-[11px] md:text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1.5 md:px-4 md:py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
+                      로그인
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </nav>
+          </nav>
 
-        {/* 메인 컨텐츠 영역 */}
-        <main className="min-h-screen">
-          {children}
-        </main>
+          <main className="min-h-screen">
+            {children}
+          </main>
+        </NextAuthProvider>
       </body>
     </html>
   );
