@@ -14,14 +14,13 @@ export default function SellerClient({
   const [mounted, setMounted] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('available');
   
-  // --- 필터 및 정렬 상태 관리 ---
-  const [selectedFilter, setSelectedFilter] = useState("전체보기"); // 신청 가능 목록 필터
-  const [confirmedFilter, setConfirmedFilter] = useState("전체보기"); // 확정 일정 필터
-  const [confirmedSort, setConfirmedSort] = useState("asc"); // 확정 일정 정렬 (asc: 날짜순, desc: 최신순)
+  // 필터 상태 관리
+  const [selectedFilter, setSelectedFilter] = useState("전체보기");
+  const [confirmedFilter, setConfirmedFilter] = useState("전체보기");
+  const [confirmedSort, setConfirmedSort] = useState("asc");
 
   useEffect(() => { setMounted(true); }, []);
 
-  // 24시간제 우선 표기 (오전/오후 병기)
   const formatMeetingTime = (date: Date) => {
     if (!mounted) return "";
     const h24 = date.getHours().toString().padStart(2, '0');
@@ -30,11 +29,11 @@ export default function SellerClient({
     return `${h24}:${min} (${ampm})`;
   };
 
-  // 1. 신청 가능 목록용 데이터 가공
-  const filterOptions = useMemo(() => {
+  // 1. 신청 가능 목록용 데이터 가공 (타입 명시)
+  const filterOptions = useMemo<string[]>(() => {
     if (!availableSlots) return ["전체보기"];
     const types = availableSlots.map((s: any) => s.buyer?.userType).filter(Boolean);
-    return ["전체보기", ...Array.from(new Set(types))];
+    return ["전체보기", ...Array.from(new Set(types)) as string[]];
   }, [availableSlots]);
 
   const filteredSlots = useMemo(() => {
@@ -43,10 +42,10 @@ export default function SellerClient({
   }, [selectedFilter, availableSlots]);
 
   // 2. 확정 일정용 데이터 가공 (필터 + 정렬)
-  const confirmedFilterOptions = useMemo(() => {
+  const confirmedFilterOptions = useMemo<string[]>(() => {
     if (!confirmedMeetings) return ["전체보기"];
     const types = confirmedMeetings.map((m: any) => m.buyer?.userType).filter(Boolean);
-    return ["전체보기", ...Array.from(new Set(types))];
+    return ["전체보기", ...Array.from(new Set(types)) as string[]];
   }, [confirmedMeetings]);
 
   const displayConfirmed = useMemo(() => {
@@ -75,13 +74,13 @@ export default function SellerClient({
   return (
     <div className="min-h-screen relative overflow-hidden bg-[#f4f7fa] font-sans text-slate-900 pb-20">
       
-      {/* --- 트렌디한 메쉬 배경 --- */}
+      {/* --- 배경 데코레이션 --- */}
       <div className="absolute top-[-10%] left-[-5%] w-[90%] md:w-[45%] h-[40%] bg-emerald-100/30 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[0%] right-[-5%] w-[80%] md:w-[40%] h-[40%] bg-blue-100/30 rounded-full blur-[100px] pointer-events-none"></div>
 
       <div className={`relative z-10 p-4 md:p-8 max-w-7xl mx-auto space-y-8 md:space-y-12 ${isPending ? 'opacity-70 pointer-events-none' : ''}`}>
         
-        {/* --- 상단: 요약 메뉴 바 (2x2 그리드) --- */}
+        {/* 상단 요약 바 */}
         <header className="bg-white/80 backdrop-blur-2xl p-5 md:p-10 rounded-[35px] md:rounded-[45px] shadow-xl border border-white">
           <div className="grid grid-cols-2 md:flex md:justify-around gap-4 md:gap-8">
             {[
@@ -95,7 +94,7 @@ export default function SellerClient({
                 onClick={() => setExpandedSection(item.id)} 
                 className={`flex flex-col items-center justify-center gap-2 p-3 md:p-0 rounded-[25px] transition-all duration-300 ${expandedSection === item.id ? 'bg-emerald-50 md:bg-transparent scale-105' : ''}`}
               >
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[22px] flex items-center justify-center text-xl md:text-2xl shadow-lg ${expandedSection === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400'}`}>
+                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[22px] flex items-center justify-center text-xl md:text-2xl shadow-lg ${expandedSection === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 group-hover:bg-slate-50'}`}>
                   {item.icon}
                 </div>
                 <div className="text-center">
@@ -110,8 +109,7 @@ export default function SellerClient({
         </header>
 
         <main className="min-h-[500px]">
-          
-          {/* 1. 신청 가능한 미팅 (Discover) */}
+          {/* 1. 신청 가능 목록 (Discover) */}
           {expandedSection === 'available' && (
             <section className="animate-in fade-in slide-in-from-bottom-6 space-y-10">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 px-4">
@@ -121,9 +119,16 @@ export default function SellerClient({
                     </h2>
                     <p className="text-slate-400 font-bold text-xs md:text-sm">현재 비즈니스 파트너를 찾고 있는 바이어 목록입니다.</p>
                 </div>
+                {/* 필터 부분: (opt: string) 추가하여 에러 해결 */}
                 <div className="flex flex-wrap gap-2 justify-end w-full md:w-auto">
-                  {filterOptions.map(opt => (
-                    <button key={opt} onClick={() => setSelectedFilter(opt)} className={`px-5 py-2.5 rounded-full text-[10px] md:text-xs font-black transition-all border shadow-sm ${selectedFilter === opt ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white text-slate-400 border-white hover:bg-slate-50'}`}>{opt}</button>
+                  {filterOptions.map((opt: string) => (
+                    <button 
+                      key={opt} 
+                      onClick={() => setSelectedFilter(opt)} 
+                      className={`px-5 py-2 rounded-full text-[10px] md:text-xs font-black transition-all border shadow-sm ${selectedFilter === opt ? 'bg-slate-900 text-white border-slate-900 shadow-slate-200' : 'bg-white text-slate-400 border-white hover:bg-slate-50'}`}
+                    >
+                      {opt}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -140,7 +145,7 @@ export default function SellerClient({
                       
                       <div className="bg-slate-50/50 p-5 rounded-[30px] border border-slate-100 shadow-inner">
                         <p className="text-[10px] font-black text-slate-300 uppercase mb-2 italic">Preference</p>
-                        <p className="text-xs font-bold text-slate-600 leading-relaxed italic break-keep overflow-y-auto max-h-24 custom-scrollbar">
+                        <p className="text-xs font-bold text-slate-600 leading-relaxed italic break-keep overflow-y-auto max-h-24">
                           "{slot.buyer?.preferredPartners || "전분야 협업 가능"}"
                         </p>
                       </div>
@@ -199,7 +204,7 @@ export default function SellerClient({
                 <div className="text-left">
                     <h2 className="text-3xl font-black text-slate-800 tracking-tight">확정된 일정 <span className="text-emerald-500 italic font-normal text-xl ml-1 uppercase">Confirmed</span></h2>
                 </div>
-                {/* 확정 일정 필터 및 정렬 바 */}
+                {/* 필터 부분: (opt: string) 추가 */}
                 <div className="flex flex-wrap gap-3 justify-end w-full md:w-auto items-center">
                    <select 
                      value={confirmedSort} 
@@ -210,18 +215,24 @@ export default function SellerClient({
                      <option value="desc">최신순 (가까운일정)</option>
                    </select>
                    <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden md:block"></div>
-                   {confirmedFilterOptions.map(opt => (
-                    <button key={opt} onClick={() => setConfirmedFilter(opt)} className={`px-4 py-2 rounded-full text-[10px] font-black transition-all border shadow-sm ${confirmedFilter === opt ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-400 border-slate-100'}`}>{opt}</button>
+                   {confirmedFilterOptions.map((opt: string) => (
+                    <button 
+                      key={opt} 
+                      onClick={() => setConfirmedFilter(opt)} 
+                      className={`px-4 py-2 rounded-full text-[10px] font-black transition-all border shadow-sm ${confirmedFilter === opt ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-400 border-slate-100'}`}
+                    >
+                      {opt}
+                    </button>
                   ))}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {displayConfirmed.map((m: any) => (
-                  <div key={m.id} className="bg-slate-900 text-white p-8 md:p-12 rounded-[45px] shadow-2xl relative border border-slate-800 overflow-hidden group text-left min-h-[400px] h-auto flex flex-col">
-                    <div className="absolute top-0 right-0 p-8 opacity-10 text-5xl group-hover:scale-110 transition-all duration-700">🤝</div>
+                  <div key={m.id} className="bg-slate-900 text-white p-8 md:p-12 rounded-[45px] shadow-2xl relative border border-slate-800 overflow-hidden group text-left h-full">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 text-5xl group-hover:scale-110 transition-all">🤝</div>
                     <div className="space-y-8 relative z-10 flex-grow">
                         <div className="space-y-1">
-                            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest italic">Schedule</p>
+                            <p className="text-emerald-400 text-[10px] font-black uppercase italic tracking-widest">Schedule</p>
                             <h3 className="text-2xl md:text-3xl font-black tracking-tight">{mounted && formatMeetingTime(new Date(m.timeSlot.startTime))}</h3>
                             <p className="text-slate-500 text-xs font-bold">{mounted && new Date(m.timeSlot.startTime).toLocaleDateString('ko-KR', {dateStyle: 'full'})}</p>
                         </div>
@@ -243,7 +254,7 @@ export default function SellerClient({
             </section>
           )}
 
-          {/* 4. 거절된 내역 (Rejected) */}
+          {/* 4. 거절된 내역 섹션 */}
           {expandedSection === 'rejected' && (
             <section className="animate-in fade-in slide-in-from-bottom-6 space-y-8">
               <div className="px-4 text-left">
