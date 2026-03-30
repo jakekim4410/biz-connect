@@ -2,7 +2,11 @@
 
 import { db } from "../../lib/db";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
+// 1. 미팅 신청
 export async function applyMeetingAction(formData: FormData, sellerId: number) {
   const slotId = Number(formData.get("slotId"));
   const buyerId = Number(formData.get("buyerId"));
@@ -19,4 +23,155 @@ export async function applyMeetingAction(formData: FormData, sellerId: number) {
   });
 
   revalidatePath("/seller");
+}
+
+// 2. 멤버 승인/거절 처리 (마스터 전용)
+export async function handleMemberStatus(memberId: number, status: "APPROVED" | "REJECTED") {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+  
+  const masterId = Number((session.user as any).id);
+  const master = await db.user.findUnique({ where: { id: masterId } });
+
+  if (!master?.isMaster) return { error: "권한이 없습니다." };
+
+  await db.user.update({
+    where: { id: memberId },
+    data: { approvalStatus: status }
+  });
+
+  // 승인 시 마스터의 비즈니스 정보를 멤버에게 동기화
+  if (status === "APPROVED") {
+    const masterOP = await db.onePager.findUnique({ where: { userId: masterId } });
+    if (masterOP) {
+      const member = await db.user.findUnique({ where: { id: memberId } });
+      const { id, userId, picName, picTitle, contactEmail, ...bizData } = masterOP;
+      
+      await db.onePager.upsert({
+        where: { userId: memberId },
+        update: { ...bizData },
+        create: { 
+          ...bizData, 
+          userId: memberId, 
+          picName: member!.name, 
+          picTitle: member!.jobTitle, 
+          contactEmail: member!.email 
+        }
+      });
+    }
+  }
+  
+  revalidatePath("/seller");
+  return { success: true };
+}
+
+// 3. 마스터 권한 위임
+export async function transferMasterRole(newMasterId: number) {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+  
+  const currentUserId = Number((session.user as any).id);
+
+  try {
+    await db.$transaction([
+      db.user.update({ where: { id: currentUserId }, data: { isMaster: false } }),
+      db.user.update({ where: { id: newMasterId }, data: { isMaster: true, approvalStatus: "APPROVED" } })
+    ]);
+    
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (e) {
+    return { error: "권한 위임 중 오류 발생" };
+  }
+}
+
+// 4. 거절된 유저 재신청
+export async function reRequestApprovalAction() {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+  
+  const userId = Number((session.user as any).id);
+  
+  await db.user.update({
+    where: { id: userId },
+    data: { approvalStatus: "PENDING" }
+  });
+  
+  revalidatePath("/seller");
+  return { success: true };
+}
+
+// 5. 원페이저 저장 및 전사 동기화
+export async function saveOnePager(formData: FormData) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "SELLER") return { error: "권한이 없습니다." };
+
+  const userId = Number((session.user as any).id);
+  const file = formData.get("pitchDeckFile") as File;
+  let pitchDeckUrl = formData.get("pitchDeckUrl") as string;
+
+  if (file && file.size > 0) {
+    const fileExt = file.name.split('.').pop();
+    const safeName = file.name.replace(/[^\x00-\x7F]/g, "").replace(/\s/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
+    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage.from('pitchdecks').upload(filename, file, { upsert: true });
+    if (uploadError) return { error: "파일 업로드 실패" };
+    
+    const { data: { publicUrl } } = supabase.storage.from('pitchdecks').getPublicUrl(filename);
+    pitchDeckUrl = publicUrl;
+  }
+
+  const currentUser = await db.user.findUnique({ where: { id: userId }, select: { companyName: true } });
+  
+  const sharedBusinessData = {
+    companyNameKr: (formData.get("companyNameKr") as string) || "",
+    companyNameEn: (formData.get("companyNameEn") as string) || "",
+    ceoName: (formData.get("ceoName") as string) || "",
+    productType: (formData.get("productType") as string) || "",
+    solutionSummary: (formData.get("solutionSummary") as string) || "",
+    problem: (formData.get("problem") as string) || "",
+    solution: (formData.get("solution") as string) || "",
+    traction: (formData.get("traction") as string) || "",
+    bizModel: (formData.get("bizModel") as string) || "",
+    primaryTech: (formData.get("primaryTech") as string) || "",
+    industrySector: (formData.get("industrySector") as string) || "",
+    yearFounded: (formData.get("yearFounded") as string) || "",
+    investmentStage: (formData.get("investmentStage") as string) || "",
+    monthlyRevenue: (formData.get("monthlyRevenue") as string) || "",
+    pitchDeckUrl: pitchDeckUrl || "",
+  };
+
+  const personalPicData = {
+    picName: (formData.get("picName") as string) || "",
+    picTitle: (formData.get("picTitle") as string) || "",
+    contactEmail: (formData.get("contactEmail") as string) || "",
+  };
+
+  try {
+    await db.onePager.upsert({
+      where: { userId },
+      update: { ...sharedBusinessData, ...personalPicData },
+      create: { ...sharedBusinessData, ...personalPicData, userId },
+    });
+
+    const companyMembers = await db.user.findMany({
+      where: { companyName: currentUser!.companyName, approvalStatus: "APPROVED" },
+      select: { id: true }
+    });
+
+    const memberIds = companyMembers.map(m => m.id).filter(id => id !== userId);
+    
+    if (memberIds.length > 0) {
+      await db.onePager.updateMany({
+        where: { userId: { in: memberIds } },
+        data: sharedBusinessData
+      });
+    }
+
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (error) {
+    return { error: "저장 중 오류 발생" };
+  }
 }

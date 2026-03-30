@@ -13,11 +13,15 @@ model User {
   email             String   @unique
   password          String
   name              String
-  role              String   // "BUYER", "SELLER", "ADMIN"
+  role              String   // "BUYER", "SELLER", "ADMIN" (전체 관리자)
   companyName       String
   jobTitle          String   
   phone             String   
   
+  // [수정] 마스터/멤버 구분 및 승인 시스템
+  isMaster          Boolean  @default(false)     // 마스터 여부 (최초 가입자 등)
+  approvalStatus    String   @default("APPROVED") // "PENDING", "APPROVED", "REJECTED"
+
   userType          String?  
   userTypeDetail    String?  
   preferredPartners String?  
@@ -25,6 +29,9 @@ model User {
   timeSlots         TimeSlot[]
   meetingsAsBuyer   Meeting[] @relation("BuyerMeetings")
   meetingsAsSeller  Meeting[] @relation("SellerMeetings")
+  
+  onePager          OnePager?
+
   createdAt         DateTime @default(now())
 }
 
@@ -33,7 +40,7 @@ model TimeSlot {
   startTime   DateTime
   endTime     DateTime
   description String?  
-  location    String?  // <-- 추가: 최초 생성 시 장소
+  location    String?  
   status      String   @default("OPEN")
   buyer       User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId     Int
@@ -45,9 +52,9 @@ model Meeting {
   status                String   @default("PENDING")
   proposal              String?  
   rejectionReason       String?  
-  location              String?  // 최종 확정 장소
-  pendingLocation       String?  // <-- 추가: 바이어가 수정을 요청한 임시 장소
-  locationChangeStatus  String?  // <-- 추가: "PENDING", "REJECTED" (수락 시 null로 초기화)
+  location              String?  
+  pendingLocation       String?  
+  locationChangeStatus  String?  
   timeSlot              TimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
   timeSlotId            Int
   buyer                 User     @relation("BuyerMeetings", fields: [buyerId], references: [id], onDelete: Cascade)
@@ -55,4 +62,34 @@ model Meeting {
   seller                User     @relation("SellerMeetings", fields: [sellerId], references: [id], onDelete: Cascade)
   sellerId              Int
   createdAt             DateTime @default(now())
+}
+
+model OnePager {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  companyNameKr   String   @default("") 
+  companyNameEn   String   @default("") 
+  ceoName         String   @default("") 
+  picName         String   @default("") 
+  picTitle        String   @default("") 
+  
+  productType     String   @default("")
+  solutionSummary String   @db.Text @default("")
+  
+  problem         String   @db.Text @default("")
+  solution        String   @db.Text @default("")
+  traction        String   @db.Text @default("")
+  bizModel        String   @db.Text @default("")
+
+  primaryTech     String   @default("")
+  industrySector  String   @default("")
+  yearFounded     String   @default("")
+  investmentStage String   @default("")
+  monthlyRevenue  String   @default("")
+  pitchDeckUrl    String   @default("")
+  contactEmail    String   @default("")
+
+  updatedAt       DateTime @updatedAt
 }

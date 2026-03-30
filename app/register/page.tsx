@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { registerUserAction } from "./action";
+import { useState, useEffect } from "react";
+import { registerUserAction, checkExistingCompanyAction } from "./action";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(""); // 성함 상태
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [selectedType, setSelectedType] = useState("VC");
@@ -17,6 +17,10 @@ export default function RegisterPage() {
   
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
+
+  // 회사 검증 관련
+  const [similarCompanies, setSimilarCompanies] = useState<any[]>([]);
+  const [isSameCompanyConfirmed, setIsSameCompanyConfirmed] = useState(false);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^0-9]/g, "");
@@ -27,8 +31,21 @@ export default function RegisterPage() {
     setPhone(formatted);
   };
 
+  // 실시간 회사 검색 (성함과는 무관하게 동작)
+  useEffect(() => {
+    const searchTimer = setTimeout(async () => {
+      if (companyName.length >= 2 && !isSameCompanyConfirmed) {
+        const results = await checkExistingCompanyAction(companyName);
+        setSimilarCompanies(results);
+      } else {
+        setSimilarCompanies([]);
+      }
+    }, 500);
+    return () => clearTimeout(searchTimer);
+  }, [companyName, isSameCompanyConfirmed]);
+
   const isPasswordMatch = password === confirmPassword && password !== "";
-  const isPasswordValid = password.length >= 8; // 8자 기준
+  const isPasswordValid = password.length >= 8;
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-slate-900 font-sans">
@@ -46,9 +63,11 @@ export default function RegisterPage() {
         }} 
         className="bg-white p-12 rounded-[40px] shadow-2xl w-full max-w-2xl space-y-6 border border-slate-100"
       >
-        <h1 className="text-3xl font-black text-blue-600 mb-8 text-center tracking-tighter">BizConnect 가입</h1>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-black text-blue-600 tracking-tighter">BizConnect 가입</h1>
+          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-[0.2em]">Personal Account Registration</p>
+        </div>
         
-        {/* 에러 박스 - 코드가 아닌 한글 메시지만 노출 */}
         {error && (
           <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-sm font-bold border border-rose-100 flex items-center gap-2">
             <span>⚠️</span> {error}
@@ -58,69 +77,104 @@ export default function RegisterPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1">계정 유형</label>
-            <select name="role" className="w-full p-4 bg-slate-50 rounded-2xl border mt-1 font-bold">
+            <select name="role" className="w-full p-4 bg-slate-50 rounded-2xl border mt-1 font-bold outline-none">
               <option value="BUYER">투자자 (VC, AC, BUYER)</option>
-              <option value="SELLER">스타트업</option>
+              <option value="SELLER">스타트업 (STARTUP)</option>
             </select>
           </div>
 
           <input name="email" type="email" placeholder="이메일 주소" required value={email} onChange={(e) => setEmail(e.target.value)} className="col-span-2 md:col-span-1 p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500" />
-          
-          <input name="phone" type="text" placeholder="전화번호 (010-0000-0000)" maxLength={13} required value={phone} onChange={handlePhoneChange} className="col-span-2 md:col-span-1 p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500" />
+          <input name="phone" type="text" placeholder="전화번호" maxLength={13} required value={phone} onChange={handlePhoneChange} className="col-span-2 md:col-span-1 p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500" />
 
-          {/* 비밀번호 입력 - 가이드 추가 */}
           <div className="col-span-2 md:col-span-1">
-            <input 
-              name="password" type="password" placeholder="비밀번호 (8자 이상)" required 
-              value={password} onChange={(e) => setPassword(e.target.value)}
-              className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${password.length > 0 && !isPasswordValid ? 'border-rose-500' : ''}`} 
-            />
-            <p className={`text-[10px] mt-1 ml-2 font-bold ${isPasswordValid ? 'text-emerald-500' : 'text-slate-400'}`}>
-              {isPasswordValid ? "✓ 보안 강도가 적정합니다." : "* 최소 8자 이상 입력하세요."}
-            </p>
+            <input name="password" type="password" placeholder="비밀번호 (8자 이상)" required value={password} onChange={(e) => setPassword(e.target.value)} className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${password.length > 0 && !isPasswordValid ? 'border-rose-500' : ''}`} />
           </div>
 
           <div className="col-span-2 md:col-span-1">
+            <input name="confirmPassword" type="password" placeholder="비밀번호 확인" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${!isPasswordMatch && confirmPassword ? 'border-rose-500' : ''}`} />
+          </div>
+
+          {/* 회사명 섹션 */}
+          <div className="col-span-2 relative">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">회사명 (Company)</label>
             <input 
-              name="confirmPassword" type="password" placeholder="비밀번호 확인" required 
-              value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-              className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${!isPasswordMatch && confirmPassword ? 'border-rose-500' : ''}`} 
+              name="companyName" 
+              placeholder="회사명을 입력하세요" 
+              required 
+              value={companyName} 
+              onChange={(e) => {
+                setCompanyName(e.target.value);
+                setIsSameCompanyConfirmed(false);
+              }} 
+              className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${isSameCompanyConfirmed ? 'border-emerald-500 bg-emerald-50/30' : ''}`} 
             />
-            {confirmPassword && (
-              <p className={`text-[10px] mt-1 ml-2 font-bold ${isPasswordMatch ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {isPasswordMatch ? "✓ 비밀번호가 일치합니다." : "✕ 비밀번호가 일치하지 않습니다."}
-              </p>
+            
+            {similarCompanies.length > 0 && !isSameCompanyConfirmed && (
+              <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95">
+                <p className="text-xs font-black text-slate-500">이미 등록된 유사한 회사가 있습니다. 소속 회사를 선택해 주세요.</p>
+                <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2">
+                  {similarCompanies.map((comp) => (
+                    <button
+                      key={comp.companyName}
+                      type="button"
+                      onClick={() => {
+                        setCompanyName(comp.companyName); // 회사명만 가져옴
+                        setIsSameCompanyConfirmed(true);
+                        setSimilarCompanies([]);
+                        // 성함(name)은 건드리지 않음
+                      }}
+                      className="flex justify-between items-center p-4 hover:bg-blue-50 rounded-2xl border border-slate-50 transition-all text-left"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-black text-sm text-slate-800 block">{comp.companyName}</span>
+                        <p className="text-[10px] text-slate-400">기존 가입자 확인용: {comp.name}님</p>
+                      </div>
+                      <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-lg">선택</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {isSameCompanyConfirmed && (
+              <p className="text-[10px] text-emerald-600 font-black mt-1.5 ml-2">✓ 기존 등록된 회사입니다. 비즈니스 정보가 자동 연계됩니다.</p>
             )}
           </div>
 
-          <input name="name" placeholder="성함" required value={name} onChange={(e) => setName(e.target.value)} className="p-4 bg-slate-50 rounded-2xl border" />
-          <input name="jobTitle" placeholder="직함" required value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="p-4 bg-slate-50 rounded-2xl border" />
-          <input name="companyName" placeholder="회사명" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="col-span-2 p-4 bg-slate-50 rounded-2xl border" />
+          {/* 성함 필드 (독립적 입력) */}
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">가입자 성함 (Full Name)</label>
+            <input name="name" placeholder="실명을 입력하세요" required value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border outline-none focus:ring-2 ring-blue-500/20" />
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">직함 (Job Title)</label>
+            <input name="jobTitle" placeholder="예: 팀장, 대표, 매니저" required value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border outline-none focus:ring-2 ring-blue-500/20" />
+          </div>
         </div>
 
-        <div className="space-y-3 pt-4 border-t">
+        <div className="space-y-3 pt-4 border-t border-slate-100">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회원 유형</label>
           <div className="flex gap-2 flex-wrap">
             {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
-              <label key={v} className={`flex-1 min-w-[80px] text-center p-3 border rounded-xl cursor-pointer text-xs font-bold transition-all ${selectedType === v ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"}`}>
+              <label key={v} className={`flex-1 min-w-[80px] text-center p-3.5 border rounded-2xl cursor-pointer text-xs font-black transition-all ${selectedType === v ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100" : "bg-white text-slate-400 border-slate-100"}`}>
                 <input type="radio" name="userType" value={v} className="hidden" checked={selectedType === v} onChange={(e) => setSelectedType(e.target.value)} />
                 {v}
               </label>
             ))}
           </div>
           {selectedType === "기타" && (
-            <input name="userTypeDetail" type="text" placeholder="유형을 직접 입력하세요 (예 : 공공가관, 언론사 등)" required value={userTypeDetail} onChange={(e) => setUserTypeDetail(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-sm" />
+            <input name="userTypeDetail" type="text" placeholder="상세 유형 입력" required value={userTypeDetail} onChange={(e) => setUserTypeDetail(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-sm" />
           )}
         </div>
 
-        <textarea name="preferredPartners" placeholder="선호하는 미팅 상대 및 관심 산업군" value={preferredPartners} onChange={(e) => setPreferredPartners(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border h-24 text-sm" />
+        <textarea name="preferredPartners" placeholder="관심 산업군 및 선호하는 파트너를 적어주세요." value={preferredPartners} onChange={(e) => setPreferredPartners(e.target.value)} className="w-full p-5 bg-slate-50 rounded-[30px] border h-24 text-sm outline-none" />
 
         <button 
           type="submit"
           disabled={!isPasswordMatch || !isPasswordValid || isPending}
-          className={`w-full py-5 rounded-3xl font-black text-xl shadow-xl transition-all ${isPasswordMatch && isPasswordValid && !isPending ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+          className={`w-full py-6 rounded-[30px] font-black text-xl shadow-2xl transition-all ${isPasswordMatch && isPasswordValid && !isPending ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
         >
-          {isPending ? "가입 처리 중..." : "회원가입 완료"}
+          {isPending ? "가입 처리 중..." : "BizConnect 시작하기"}
         </button>
       </form>
     </div>
