@@ -8,7 +8,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
-  providers: [
+  providers:[
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -22,19 +22,23 @@ export const authOptions: NextAuthOptions = {
         
         const user = await db.user.findUnique({ where: { email: credentials.email } });
         
-        // 💡 수정된 부분: 유저가 없으면 특정 에러 메시지를 던집니다.
         if (!user) {
           throw new Error("UserNotFound");
+        }
+
+        // ⭐ 관리자 승인 상태 검사 (ADMIN 제외)
+        if (user.role !== "ADMIN") {
+          if (user.approvalStatus === "PENDING") {
+            throw new Error("PendingApproval"); 
+          }
         }
         
         const isValid = await bcrypt.compare(credentials.password, user.password);
         
-        // 💡 수정된 부분: 비밀번호가 틀리면 특정 에러 메시지를 던집니다.
         if (!isValid) {
           throw new Error("IncorrectPassword");
         }
         
-        // 1. 로그인 성공 시 반환하는 객체에 companyName 추가 (기존 코드 유지)
         return { 
           id: user.id.toString(), 
           email: user.email, 
@@ -50,7 +54,6 @@ export const authOptions: NextAuthOptions = {
       if (user) { 
         token.id = user.id; 
         token.role = (user as any).role; 
-        // 2. 토큰을 생성할 때 companyName을 토큰에 저장 (기존 코드 유지)
         token.companyName = (user as any).companyName; 
       }
       return token;
@@ -59,7 +62,6 @@ export const authOptions: NextAuthOptions = {
       if (session.user) { 
         (session.user as any).id = token.id; 
         (session.user as any).role = token.role; 
-        // 3. 프론트엔드로 보내는 세션 객체에 companyName 노출 (기존 코드 유지)
         (session.user as any).companyName = token.companyName; 
       }
       return session;

@@ -1,12 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 
 // 1. 유사 회사명 존재 여부 확인
 export async function checkExistingCompanyAction(companyName: string) {
-  if (!companyName || companyName.length < 2) return [];
+  if (!companyName || companyName.length < 2) return[];
 
   try {
     const existingCompanies = await db.user.findMany({
@@ -20,8 +19,9 @@ export async function checkExistingCompanyAction(companyName: string) {
       select: {
         companyName: true,
         name: true, 
-        role: true, // [추가됨] 기존 회사가 BUYER인지 SELLER인지 프론트에서 알기 위해 추가
+        role: true, 
         onePager: true, 
+        businessNumber: true, // 👈 추가됨: 화면에 표시하기 위해 사업자번호도 함께 가져옴
       },
     });
 
@@ -30,7 +30,44 @@ export async function checkExistingCompanyAction(companyName: string) {
     return uniqueCompanies;
   } catch (e) {
     console.error("회사 검색 에러:", e);
-    return [];
+    return[];
+  }
+}
+
+// 1-2. 사업자등록번호로 동일 회사 존재 여부 확인
+export async function checkExistingBusinessNumberAction(businessNumber: string) {
+  if (!businessNumber || businessNumber.length < 10) return null;
+
+  try {
+    const existingCompany = await db.user.findFirst({
+      where: { businessNumber: businessNumber },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        companyName: true,
+        name: true,
+        role: true,
+      },
+    });
+    return existingCompany;
+  } catch (e) {
+    console.error("사업자 검색 에러:", e);
+    return null;
+  }
+}
+
+// [추가됨] 1-3. 이메일 중복 존재 여부 확인
+export async function checkExistingEmailAction(email: string) {
+  if (!email) return false;
+
+  try {
+    const existingUser = await db.user.findUnique({
+      where: { email: email },
+      select: { id: true }
+    });
+    return !!existingUser; // 존재하면 true, 없으면 false 반환
+  } catch (e) {
+    console.error("이메일 중복 확인 에러:", e);
+    return false;
   }
 }
 
@@ -40,26 +77,45 @@ export async function registerUserAction(formData: FormData) {
   const phone = formData.get("phone") as string;
   const password = formData.get("password") as string;
   const name = formData.get("name") as string; 
-  const companyName = formData.get("companyName") as string;
+  let companyName = formData.get("companyName") as string; 
   const jobTitle = formData.get("jobTitle") as string; 
   const role = formData.get("role") as string; // "BUYER" 또는 "SELLER"
   const userType = formData.get("userType") as string;
   const userTypeDetail = formData.get("userTypeDetail") as string;
   const preferredPartners = formData.get("preferredPartners") as string;
+  const businessNumber = formData.get("businessNumber") as string;
 
   if (!email || !phone || !password || !name || !companyName) {
     return { error: "필수 정보를 모두 입력해주세요." };
   }
 
-  try {
-    // [추가됨] 1회사 1역할(Role) 강제 로직
-    // 가입하려는 회사 이름이 이미 DB에 존재하는지 확인
-    const existingCompanyRecord = await db.user.findFirst({
-      where: { companyName: companyName },
-      orderBy: { createdAt: 'asc' },
-    });
+  // SELLER는 사업자등록번호 필수 검증
+  if (role === "SELLER" && !businessNumber) {
+    return { error: "스타트업(SELLER)은 사업자등록번호를 반드시 입력해야 합니다." };
+  }
 
-    // 기존 회사가 존재하는데, 이번에 가입하려는 역할(role)과 다르다면 가입 차단
+  try {
+    let existingCompanyRecord = null;
+
+    // 1회사 1역할 및 사업자번호 기반 그룹핑
+    if (role === "SELLER" && businessNumber) {
+      existingCompanyRecord = await db.user.findFirst({
+        where: { businessNumber: businessNumber },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (existingCompanyRecord) {
+        companyName = existingCompanyRecord.companyName;
+      }
+    }
+
+    if (!existingCompanyRecord) {
+      existingCompanyRecord = await db.user.findFirst({
+        where: { companyName: companyName },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
     if (existingCompanyRecord && existingCompanyRecord.role !== role) {
       const roleName = existingCompanyRecord.role === "BUYER" ? "투자자(BUYER)" : "스타트업(SELLER)";
       return { error: `[가입 불가] '${companyName}'은(는) 이미 ${roleName}로 등록된 회사입니다. 동일한 계정 유형으로만 가입 가능합니다.` };
@@ -67,19 +123,18 @@ export async function registerUserAction(formData: FormData) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 동일 회사 이름으로 먼저 가입한 '마스터' 유저가 있는지 확인
     const masterUser = await db.user.findFirst({
       where: { companyName: companyName, isMaster: true },
       orderBy: { createdAt: 'asc' },
       include: { onePager: true }
     });
 
-    // 마스터가 없으면 내가 해당 회사의 첫 번째 가입자(Master 권한 부여 대상)가 됨
     const isFirstUser = !masterUser;
 
     let isMaster = false;
     let approvalStatus = "PENDING"; 
 
+    // 바이어 가입 시 어드민 승인 필수 로직 명확화
     if (role === "SELLER") {
       if (isFirstUser) {
         isMaster = true;
@@ -100,6 +155,7 @@ export async function registerUserAction(formData: FormData) {
         password: hashedPassword, 
         name, 
         companyName, 
+        businessNumber: businessNumber || null,
         jobTitle, 
         phone, 
         role,
@@ -148,10 +204,15 @@ export async function registerUserAction(formData: FormData) {
         });
       }
     }
+
+    return { success: true, role: newUser.role, approvalStatus: newUser.approvalStatus };
+
   } catch (e: any) {
     console.error("DB 저장 에러:", e);
-    return { error: "이미 가입된 이메일이거나 데이터 저장 중 오류가 발생했습니다." };
+    // Prisma 고유 에러코드 P2002는 Unique 제약조건(이메일 중복 등) 위반입니다.
+    if (e.code === 'P2002') {
+      return { error: "이미 가입된 이메일입니다." };
+    }
+    return { error: "데이터 저장 중 오류가 발생했습니다." };
   }
-
-  redirect("/login");
 }

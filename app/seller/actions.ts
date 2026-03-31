@@ -26,7 +26,7 @@ export async function applyMeetingAction(formData: FormData, sellerId: number) {
 }
 
 // 2. 멤버 승인/거절 처리 (마스터 전용)
-export async function handleMemberStatus(memberId: number, status: "APPROVED" | "REJECTED") {
+export async function handleMemberStatus(memberId: number, status: "APPROVED" | "REJECTED", reason?: string) {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "로그인이 필요합니다." };
   
@@ -35,9 +35,16 @@ export async function handleMemberStatus(memberId: number, status: "APPROVED" | 
 
   if (!master?.isMaster) return { error: "권한이 없습니다." };
 
+  const dataToUpdate: any = { approvalStatus: status };
+  if (status === "REJECTED") {
+    dataToUpdate.rejectionReason = reason || null; // 거절 사유 저장
+  } else if (status === "APPROVED") {
+    dataToUpdate.rejectionReason = null; // 승인 시 거절 사유 초기화
+  }
+
   await db.user.update({
     where: { id: memberId },
-    data: { approvalStatus: status }
+    data: dataToUpdate
   });
 
   // 승인 시 마스터의 비즈니스 정보를 멤버에게 동기화
@@ -85,25 +92,27 @@ export async function transferMasterRole(newMasterId: number) {
   }
 }
 
-// 4. 거절된 유저 정보 수정 및 재신청 [이 부분 기능이 업그레이드 되었습니다]
+// 4. 거절된 유저 정보 수정 및 재신청 (👇 사업자등록번호 업데이트 추가)
 export async function reRequestApprovalAction(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "로그인이 필요합니다." };
   
   const userId = Number((session.user as any).id);
 
-  // 폼에서 입력받은 수정된 정보 가져오기
   const name = formData.get("name") as string;
   const jobTitle = formData.get("jobTitle") as string;
   const phone = formData.get("phone") as string;
   const companyName = formData.get("companyName") as string;
+  const businessNumber = formData.get("businessNumber") as string; // 👈 추가됨
+  const userType = formData.get("userType") as string;
+  const userTypeDetail = formData.get("userTypeDetail") as string;
+  const preferredPartners = formData.get("preferredPartners") as string;
 
   if (!name || !jobTitle || !phone || !companyName) {
-    return { error: "수정할 정보를 모두 입력해주세요." };
+    return { error: "필수 정보를 모두 입력해주세요." };
   }
   
   try {
-    // 유저 정보 업데이트 및 상태를 다시 대기(PENDING)로 변경
     await db.user.update({
       where: { id: userId },
       data: { 
@@ -111,7 +120,12 @@ export async function reRequestApprovalAction(formData: FormData) {
         jobTitle,
         phone,
         companyName,
-        approvalStatus: "PENDING" 
+        businessNumber: businessNumber || null, // 👈 추가됨
+        userType,
+        userTypeDetail,
+        preferredPartners,
+        approvalStatus: "PENDING",
+        rejectionReason: null 
       }
     });
     
@@ -195,5 +209,56 @@ export async function saveOnePager(formData: FormData) {
     return { success: true };
   } catch (error) {
     return { error: "저장 중 오류 발생" };
+  }
+}
+
+// 👇 [추가됨] 6. 유사 회사명 존재 여부 확인 (재신청 폼에서 사용)
+export async function checkExistingCompanyAction(companyName: string) {
+  if (!companyName || companyName.length < 2) return[];
+
+  try {
+    const existingCompanies = await db.user.findMany({
+      where: {
+        companyName: {
+          contains: companyName,
+          mode: 'insensitive',
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        companyName: true,
+        name: true, 
+        role: true, 
+        businessNumber: true,
+      },
+    });
+
+    // 중복 회사명 제거
+    const uniqueCompanies = Array.from(new Map(existingCompanies.map(item => [item.companyName, item])).values());
+    return uniqueCompanies;
+  } catch (e) {
+    console.error("회사 검색 에러:", e);
+    return[];
+  }
+}
+
+// 👇 [추가됨] 7. 사업자등록번호로 동일 회사 존재 여부 확인 (재신청 폼에서 사용)
+export async function checkExistingBusinessNumberAction(businessNumber: string) {
+  if (!businessNumber || businessNumber.length < 10) return null;
+
+  try {
+    const existingCompany = await db.user.findFirst({
+      where: { businessNumber: businessNumber },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        companyName: true,
+        name: true,
+        role: true,
+      },
+    });
+    return existingCompany;
+  } catch (e) {
+    console.error("사업자 검색 에러:", e);
+    return null;
   }
 }

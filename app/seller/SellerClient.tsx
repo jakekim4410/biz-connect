@@ -7,6 +7,8 @@ import {
   handleMemberStatus, 
   transferMasterRole, 
   reRequestApprovalAction,
+  checkExistingCompanyAction, // 👈 추가됨
+  checkExistingBusinessNumberAction // 👈 추가됨
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import { respondLocationChange } from "../buyer/actions";
@@ -15,17 +17,72 @@ import {
   Send, Download, Clock, FileText, Sparkles, ChevronRight, 
   Users, ShieldCheck, User as UserIcon, Save, AlertCircle, Building2,
   Trophy, ArrowRight, AlertTriangle, TrendingUp, Target,
-  XCircle, Calendar, Info, CheckCircle2 // 🚀 CheckCircle2 추가
+  XCircle, Calendar, Info, CheckCircle2
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 
 // ---------------------------------------------------------------------------
-// [1] 거절 화면 및 정보 수정 폼 컴포넌트
+// [1] 거절 화면 및 정보 수정 폼 컴포넌트 (👇 회사명, 사업자번호 검색 및 연동 로직 적용)
 // ---------------------------------------------------------------------------
 function RejectedScreen({ user }: { user: any }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState("");
+  
+  const [selectedType, setSelectedType] = useState(user?.userType || "스타트업");
+  const [userTypeDetail, setUserTypeDetail] = useState(user?.userTypeDetail || "");
+
+  // 👇 추가됨: 회사명, 사업자번호 검색 및 자동 완성 상태 관리
+  const [companyName, setCompanyName] = useState(user?.companyName || "");
+  const [businessNumber, setBusinessNumber] = useState(user?.businessNumber || "");
+  const [similarCompanies, setSimilarCompanies] = useState<any[]>([]);
+  const [isSameCompanyConfirmed, setIsSameCompanyConfirmed] = useState(true); // 수정 전엔 기존 회사로 취급
+  const [isRoleLocked, setIsRoleLocked] = useState(user?.businessNumber ? true : false); // 처음엔 잠겨있을 수 있음
+  const [phone, setPhone] = useState(user?.phone || "");
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, "");
+    let formatted = value;
+    if (value.length <= 3) formatted = value;
+    else if (value.length <= 7) formatted = `${value.slice(0, 3)}-${value.slice(3)}`;
+    else formatted = `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7, 11)}`;
+    setPhone(formatted);
+  };
+
+  const handleBusinessNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, "");
+    let formatted = value;
+    if (value.length <= 3) formatted = value;
+    else if (value.length <= 5) formatted = `${value.slice(0, 3)}-${value.slice(3)}`;
+    else formatted = `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5, 10)}`;
+    setBusinessNumber(formatted);
+  };
+
+  useEffect(() => {
+    const checkBizNum = async () => {
+      if (businessNumber.length === 12) {
+        const existing = await checkExistingBusinessNumberAction(businessNumber);
+        if (existing) {
+          setCompanyName(existing.companyName); 
+          setIsSameCompanyConfirmed(true);
+          setIsRoleLocked(true);
+        }
+      }
+    };
+    checkBizNum();
+  }, [businessNumber]);
+
+  useEffect(() => {
+    const searchTimer = setTimeout(async () => {
+      if (companyName.length >= 2 && !isSameCompanyConfirmed) {
+        const results = await checkExistingCompanyAction(companyName);
+        setSimilarCompanies(results);
+      } else {
+        setSimilarCompanies([]);
+      }
+    }, 500);
+    return () => clearTimeout(searchTimer);
+  }, [companyName, isSameCompanyConfirmed]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,6 +90,8 @@ function RejectedScreen({ user }: { user: any }) {
     setError("");
 
     const formData = new FormData(e.currentTarget);
+    formData.set("businessNumber", businessNumber); // 잠겨있을 수 있으므로 강제 세팅
+
     const result = await reRequestApprovalAction(formData);
 
     if (result?.error) {
@@ -48,69 +107,153 @@ function RejectedScreen({ user }: { user: any }) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 md:p-6 text-left font-pretendard">
         <form 
           onSubmit={handleSubmit}
-          className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl w-full max-w-md space-y-5 border border-slate-100 animate-in fade-in slide-in-from-bottom-4"
+          className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl w-full max-w-2xl space-y-6 border border-slate-100 animate-in fade-in slide-in-from-bottom-4"
         >
-          <div className="text-center mb-8">
-            <h2 className="text-xl md:text-2xl font-black text-slate-800">가입 정보 수정</h2>
-            <p className="text-[11px] md:text-xs text-slate-400 mt-2">정확 소속 정보를 입력 후 다시 신청해주세요.</p>
+          <div className="text-center mb-8 border-b border-slate-100 pb-6">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-800">가입 정보 수정 및 재신청</h2>
+            <p className="text-xs md:text-sm text-slate-500 mt-2 font-bold">거절 사유를 확인하고 정보를 올바르게 수정한 뒤 다시 제출해주세요.</p>
           </div>
 
-          {error && <p className="bg-rose-50 text-rose-500 p-3 rounded-xl text-sm font-bold text-center border border-rose-100">{error}</p>}
+          {error && <p className="bg-rose-50 text-rose-500 p-4 rounded-xl text-sm font-bold text-center border border-rose-100">{error}</p>}
 
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회사명 (Company Name)</label>
-            <input 
-              name="companyName" 
-              defaultValue={user.companyName} 
-              required 
-              className="w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 font-bold transition-all text-sm md:text-base" 
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* 👇 변경됨: 회사명 자동 검색 UI */}
+            <div className="space-y-2 md:col-span-2 relative">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회사명 (Company Name)</label>
+              <input 
+                name="companyName" 
+                placeholder="회사명을 입력하세요" 
+                required 
+                value={companyName}
+                onChange={(e) => {
+                  setCompanyName(e.target.value);
+                  setIsSameCompanyConfirmed(false);
+                  setIsRoleLocked(false);
+                }}
+                className={`w-full p-4 rounded-2xl border transition-colors focus:outline-none font-bold text-sm md:text-base ${
+                  isSameCompanyConfirmed ? 'border-emerald-500 bg-emerald-50/30 text-emerald-900' : 'bg-slate-50 border-transparent focus:bg-white focus:border-blue-500'
+                }`}
+              />
+              {similarCompanies.length > 0 && !isSameCompanyConfirmed && (
+                <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95">
+                  <p className="text-xs font-black text-slate-500">이미 등록된 유사한 회사가 있습니다. 소속 회사를 선택해 주세요.</p>
+                  <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                    {similarCompanies.map((comp) => (
+                      <button
+                        key={comp.companyName}
+                        type="button"
+                        onClick={() => {
+                          setCompanyName(comp.companyName); 
+                          setIsSameCompanyConfirmed(true);
+                          setSimilarCompanies([]);
+                          setIsRoleLocked(true);
+                          if (comp.businessNumber) {
+                            setBusinessNumber(comp.businessNumber);
+                          }
+                        }}
+                        className="flex justify-between items-center p-4 hover:bg-blue-50 rounded-2xl border border-slate-50 transition-all text-left group"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-black text-sm text-slate-800 group-hover:text-blue-700">{comp.companyName}</span>
+                            {comp.businessNumber && (
+                              <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                {comp.businessNumber}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            기존 가입자 확인용: {comp.name}님
+                            <span className="ml-2 font-bold text-blue-500">{comp.role === "BUYER" ? "[투자자]" : "[스타트업]"}</span>
+                          </p>
+                        </div>
+                        <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-lg">선택</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {isSameCompanyConfirmed && (
+                <p className="text-[10px] text-emerald-600 font-black mt-1.5 ml-2">✓ 기존 등록된 회사입니다. 비즈니스 정보가 자동 연계됩니다.</p>
+              )}
+            </div>
+
+            {/* 👇 추가됨: 사업자등록번호 잠금 연동 */}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">사업자등록번호 (Business Number)</label>
+              <input
+                name="businessNumber"
+                placeholder="000-00-00000 (숫자만 입력)"
+                maxLength={12}
+                required={user?.role === "SELLER"} // 셀러일 경우 필수
+                value={businessNumber}
+                onChange={handleBusinessNumberChange}
+                disabled={isRoleLocked}
+                className={`w-full p-4 rounded-2xl border outline-none transition-all font-bold text-sm md:text-base ${
+                  isRoleLocked 
+                    ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' 
+                    : 'bg-slate-50 border-transparent focus:bg-white focus:border-blue-500'
+                }`}
+              />
+              {isRoleLocked && businessNumber && (
+                <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">
+                  🔒 선택하신 회사의 사업자등록번호로 고정되었습니다.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">가입자 성함 (Full Name)</label>
+              <input name="name" defaultValue={user.name} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">직함 (Job Title)</label>
+              <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">전화번호 (Phone)</label>
+              <input name="phone" value={phone} onChange={handlePhoneChange} maxLength={13} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">기업 분류 (User Type)</label>
+              <div className="flex gap-2 flex-wrap mt-1">
+                {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
+                  <label key={v} className={`flex-1 min-w-[70px] text-center p-3 border rounded-[16px] cursor-pointer text-xs font-black transition-all ${selectedType === v ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100"}`}>
+                    <input type="radio" name="userType" value={v} className="hidden" checked={selectedType === v} onChange={(e) => setSelectedType(e.target.value)} />
+                    {v}
+                  </label>
+                ))}
+              </div>
+              {selectedType === "기타" && (
+                <input name="userTypeDetail" type="text" placeholder="상세 유형 입력" value={userTypeDetail} onChange={(e) => setUserTypeDetail(e.target.value)} className="w-full p-4 mt-2 bg-slate-50 border border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[16px] text-sm font-bold transition-all" />
+              )}
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">관심 파트너 및 산업군 (Interests)</label>
+              <textarea name="preferredPartners" defaultValue={user.preferredPartners} placeholder="선호하는 파트너를 기재해주세요." className="w-full p-5 bg-slate-50 rounded-[20px] border border-transparent focus:bg-white focus:border-blue-500 outline-none resize-none h-28 font-bold transition-all" />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">가입자 성함 (Full Name)</label>
-            <input 
-              name="name" 
-              defaultValue={user.name} 
-              required 
-              className="w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 font-bold transition-all text-sm md:text-base" 
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">직함 (Job Title)</label>
-            <input 
-              name="jobTitle" 
-              defaultValue={user.jobTitle} 
-              required 
-              className="w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 font-bold transition-all text-sm md:text-base" 
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">전화번호 (Phone)</label>
-            <input 
-              name="phone" 
-              defaultValue={user.phone} 
-              required 
-              className="w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 font-bold transition-all text-sm md:text-base" 
-            />
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-3 pt-6">
+          <div className="flex flex-col md:flex-row gap-3 pt-6 border-t border-slate-100">
             <button 
               type="button" 
               onClick={() => setIsEditing(false)}
-              className="w-full md:w-1/3 py-4 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all text-sm md:text-base"
+              className="w-full md:w-1/3 py-4 rounded-[20px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all"
             >
               취소
             </button>
             <button 
               type="submit"
               disabled={isPending}
-              className="w-full md:w-2/3 py-4 rounded-2xl font-black text-white bg-slate-900 hover:bg-blue-600 transition-all shadow-lg disabled:opacity-50 text-sm md:text-base"
+              className="w-full md:w-2/3 py-4 rounded-[20px] font-black text-white bg-slate-900 hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isPending ? "처리 중..." : "수정 완료 및 재신청"}
+              {isPending ? <Clock className="animate-spin" size={20}/> : <Send size={20}/>}
+              {isPending ? "재신청 처리 중..." : "수정 완료 및 재신청 제출"}
             </button>
           </div>
         </form>
@@ -120,20 +263,27 @@ function RejectedScreen({ user }: { user: any }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 md:p-6 text-left font-pretendard">
-      <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl text-center max-w-md border border-rose-100 animate-in fade-in zoom-in-95 w-full">
+      <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl max-w-md border border-rose-100 animate-in fade-in zoom-in-95 w-full text-center">
         <div className="w-16 h-16 md:w-20 md:h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <Ban className="w-8 h-8 md:w-10 md:h-10" />
         </div>
-        <h2 className="text-xl md:text-2xl font-black text-slate-800 mb-4">가입 승인 거절</h2>
-        <p className="text-slate-500 text-xs md:text-sm leading-relaxed mb-8">
-          죄송합니다. 회사 정보가 일치하지 않아 거절되었습니다.<br/>
-          정보를 수정하여 다시 신청해 주세요.
+        <h2 className="text-xl md:text-2xl font-black text-slate-800 mb-2">가입 승인 거절</h2>
+        <p className="text-slate-500 text-xs md:text-sm font-bold mb-8">
+          죄송합니다. 마스터에 의해 가입이 반려되었습니다.
         </p>
+        
+        <div className="bg-rose-50/50 border border-rose-100 p-5 rounded-2xl mb-8 text-left">
+          <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><AlertCircle size={14}/> 반려 사유 (Reason)</p>
+          <p className="text-[13px] md:text-sm font-bold text-rose-700 leading-relaxed italic break-keep">
+            "{user.rejectionReason || "마스터에 의해 가입이 거절 되었습니다."}"
+          </p>
+        </div>
+
         <button 
           onClick={() => setIsEditing(true)}
           className="w-full py-4 md:py-5 bg-slate-900 text-white rounded-[20px] md:rounded-[25px] font-black text-base md:text-lg shadow-xl hover:bg-black transition-all"
         >
-          승인 재신청 하기
+          정보 수정하여 재신청하기
         </button>
       </div>
     </div>
@@ -152,7 +302,8 @@ export default function SellerClient({
   sellerId,
   hasOnePager,
   pendingMembers = [],
-  approvedMembers = []
+  approvedMembers = [],
+  rejectedTeamMembers = [] 
 }: any) {
   
   const [isPending, setIsPending] = useState(false);
@@ -160,6 +311,9 @@ export default function SellerClient({
   const [expandedSection, setExpandedSection] = useState<string | null>('available');
   const [confirmedSort, setConfirmedSort] = useState("asc");
   const [applyingSlot, setApplyingSlot] = useState<any>(null);
+
+  const [selectedType, setSelectedType] = useState(user?.userType || "스타트업");
+  const [userTypeDetail, setUserTypeDetail] = useState(user?.userTypeDetail || "");
 
   const [seenCounts, setSeenCounts] = useState({
     available: 0,
@@ -453,6 +607,7 @@ export default function SellerClient({
 
         <main className="min-h-[500px]">
 
+          {/* 🚀 [프로필 수정 영역] */}
           {expandedSection === 'profile' && (
             <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
@@ -475,36 +630,129 @@ export default function SellerClient({
               </div>
 
               <form onSubmit={handleProfileUpdate} className="flex flex-col md:grid md:grid-cols-2 gap-6 md:gap-8">
-                <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Building2 size={12}/> 회사명 (Company)</p>
-                  <input name="companyName" defaultValue={user.companyName} disabled={!user.isMaster} className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed'}`} />
+                
+                <div className="flex flex-col space-y-2 w-full md:col-span-2">
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Mail size={12}/> 로그인 이메일 (Email) <span className="text-rose-400 ml-1 font-bold">*수정 불가</span>
+                  </p>
+                  <input name="email" defaultValue={user.email} readOnly className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold bg-slate-100 border-transparent text-slate-500 cursor-not-allowed outline-none" />
                 </div>
 
                 <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Target size={12}/> 기업 분류 (User Type)</p>
-                  <input name="userType" defaultValue={user.userType} required placeholder="가입 시 선택한 분류 (예: 스타트업, 에이전시 등)" className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold" />
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <FileText size={12}/> 사업자등록번호 (Business Number) {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*마스터 권한</span>}
+                  </p>
+                  <input 
+                    name="businessNumber" 
+                    defaultValue={user.businessNumber || ""} 
+                    readOnly={!user.isMaster} 
+                    placeholder="사업자등록번호 (숫자만)" 
+                    className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
+                  />
                 </div>
 
                 <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> 성함 (Name)</p>
-                  <input name="name" defaultValue={user.name} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold" />
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Building2 size={12}/> 회사명 (Company) {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*마스터 권한</span>}
+                  </p>
+                  <input 
+                    name="companyName" 
+                    defaultValue={user.companyName} 
+                    readOnly={!user.isMaster} 
+                    className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
+                  />
+                </div>
+
+                <div className="flex flex-col space-y-2 w-full md:col-span-2">
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Target size={12}/> 기업 분류 (User Type) {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*마스터 권한</span>}
+                  </p>
+                  <div className="flex gap-2 flex-wrap mt-1">
+                    {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
+                      <label key={v} className={`flex-1 min-w-[80px] text-center p-3.5 border rounded-[16px] md:rounded-2xl cursor-pointer text-xs font-black transition-all ${!user.isMaster ? "opacity-60 cursor-not-allowed" : ""} ${selectedType === v ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100" : "bg-white text-slate-400 border-slate-200 hover:bg-slate-50"}`}>
+                        <input 
+                          type="radio" 
+                          name="userType" 
+                          value={v} 
+                          className="hidden" 
+                          checked={selectedType === v} 
+                          onChange={(e) => {
+                            if (user.isMaster) setSelectedType(e.target.value);
+                          }} 
+                          disabled={!user.isMaster}
+                        />
+                        {v}
+                      </label>
+                    ))}
+                  </div>
+                  {selectedType === "기타" && (
+                    <input 
+                      name="userTypeDetail" 
+                      type="text" 
+                      placeholder="상세 유형 입력" 
+                      required 
+                      value={userTypeDetail} 
+                      onChange={(e) => {
+                        if (user.isMaster) setUserTypeDetail(e.target.value);
+                      }} 
+                      readOnly={!user.isMaster}
+                      className={`w-full p-3.5 md:p-4 mt-2 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-col space-y-2 w-full md:col-span-2">
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Handshake size={12}/> 관심 파트너 및 산업군 (Interests) {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*마스터 권한</span>}
+                  </p>
+                  <textarea 
+                    name="preferredPartners" 
+                    defaultValue={user.preferredPartners || ""} 
+                    readOnly={!user.isMaster} 
+                    placeholder="선호하는 파트너 조건이나 산업군" 
+                    className={`w-full p-4 md:p-5 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all resize-none h-24 ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
+                  />
+                </div>
+
+                <div className="col-span-2 my-2 border-t border-slate-100"></div>
+
+                <div className="flex flex-col space-y-2 w-full">
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <UserIcon size={12}/> 가입자 성함 (Name)
+                  </p>
+                  <input 
+                    name="name" 
+                    defaultValue={user.name} 
+                    required 
+                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
+                  />
                 </div>
 
                 <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Phone size={12}/> 연락처 (Phone)</p>
-                  <input name="phone" defaultValue={user.phone} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold" />
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Phone size={12}/> 연락처 (Phone)
+                  </p>
+                  <input 
+                    name="phone" 
+                    defaultValue={user.phone} 
+                    required 
+                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
+                  />
                 </div>
                 
                 <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> 직함 (Job Title)</p>
-                  <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold" />
+                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Check size={12}/> 직함 (Job Title)
+                  </p>
+                  <input 
+                    name="jobTitle" 
+                    defaultValue={user.jobTitle} 
+                    required 
+                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
+                  />
                 </div>
 
-                <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">관심 산업군 및 선호 파트너 (Interests)</p>
-                  <textarea name="preferredPartners" defaultValue={user.preferredPartners} className="w-full p-4 md:p-6 bg-slate-50 border-transparent focus:bg-white focus:border-blue-500 outline-none rounded-[20px] md:rounded-3xl border h-28 md:h-32 text-sm md:text-base font-bold resize-none leading-relaxed" />
-                </div>
-                <button type="submit" disabled={isPending} className="w-full md:col-span-2 py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl">
+                <button type="submit" disabled={isPending} className="w-full md:col-span-2 py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl mt-4">
                   {isPending ? <Clock className="animate-spin" size={20}/> : <Save size={20}/>}
                   <span>정보 저장하기 <span className="hidden md:inline">(Save Changes)</span></span>
                 </button>
@@ -512,6 +760,7 @@ export default function SellerClient({
             </section>
           )}
 
+          {/* 🚀 [팀 관리 영역] */}
           {expandedSection === 'team' && user.isMaster && (
             <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left">
               <div className="flex flex-col mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
@@ -520,11 +769,13 @@ export default function SellerClient({
                   팀 멤버 관리
                   <span className="px-2 md:px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black rounded-md md:rounded-lg">Master Console</span>
                 </h3>
-                <p className="text-xs md:text-sm font-bold text-slate-400 mt-2 ml-1 leading-relaxed break-keep">조직에 합류를 요청한 멤버를 승인하거나, 권한을 관리할 수 있습니다.</p>
+                <p className="text-xs md:text-sm font-bold text-slate-400 mt-2 ml-1 leading-relaxed break-keep">조직에 합류를 요청한 멤버를 승인하거나, 반려하여 수정을 요청할 수 있습니다.</p>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 md:gap-12">
                 <div className="space-y-4">
+                  
+                  {/* 대기 멤버 */}
                   <div className="flex items-center justify-between mb-4 md:mb-6">
                     <p className="text-[11px] md:text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                       <Clock size={16}/> 승인 대기 <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md">{pendingMembers.length}</span>
@@ -549,9 +800,17 @@ export default function SellerClient({
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
                           <button 
-                            onClick={async () => { setIsPending(true); await handleMemberStatus(m.id, "REJECTED"); setIsPending(false); }} 
+                            onClick={async () => { 
+                              const reason = window.prompt("거절 사유를 입력해주세요. (선택사항)\n입력하지 않으면 기본 문구가 안내됩니다.");
+                              if (reason !== null) {
+                                setIsPending(true); 
+                                await handleMemberStatus(m.id, "REJECTED", reason); 
+                                setIsPending(false); 
+                              }
+                            }} 
                             className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all"
                           >거절</button>
+                          
                           <button 
                             onClick={async () => { setIsPending(true); await handleMemberStatus(m.id, "APPROVED"); setIsPending(false); }} 
                             className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md"
@@ -559,6 +818,39 @@ export default function SellerClient({
                         </div>
                       </div>
                     ))
+                  )}
+
+                  {/* 반려(거절)된 멤버 리스트 영역 */}
+                  {rejectedTeamMembers.length > 0 && (
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-4 md:mb-6">
+                        <p className="text-[11px] md:text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+                          <Ban size={16}/> 반려된 멤버 <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md">{rejectedTeamMembers.length}</span>
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {rejectedTeamMembers.map((m: any) => (
+                          <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex flex-col justify-between gap-3 border border-rose-100 shadow-sm opacity-80 hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                              <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 font-black text-base md:text-lg">
+                                {m.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-black text-sm text-slate-800 flex items-center flex-wrap gap-1">
+                                  <span className="truncate max-w-[120px] md:max-w-full">{m.name}</span>
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.email}</p>
+                              </div>
+                            </div>
+                            <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100/50">
+                               <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">반려 사유</p>
+                               <p className="text-[11px] font-bold text-rose-600 italic">"{m.rejectionReason || "마스터에 의해 가입이 거절 되었습니다."}"</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -680,7 +972,7 @@ export default function SellerClient({
                                  <div className="flex flex-col items-end gap-2.5">
                                    {colleagueMeeting && (
                                       <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
-                                        <Users size={12}/> 팀원 중복 신청
+                                        <Users size={12}/> 팀원 중 중복 신청
                                       </span>
                                    )}
                                    <button 

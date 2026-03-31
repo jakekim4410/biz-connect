@@ -36,8 +36,8 @@ export default function MeetingConfirmedEmail({
 
   const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${eventTitle}&dates=${calStart}/${calEnd}&details=${eventDetails}&location=${eventLocation}`;
 
-  // 💡 배포 시 실제 도메인으로 변경해야 합니다. (예: https://bizconnect.com/login)
-  const loginUrl = "http://localhost:3000/login"; 
+  // 💡 배포 시 실제 도메인으로 변경해야 합니다.
+  const loginUrl = "https://biz-connect-two.vercel.app/login"; 
 
   return (
     <Html>

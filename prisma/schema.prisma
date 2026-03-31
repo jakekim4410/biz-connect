@@ -15,11 +15,13 @@ model User {
   name              String
   role              String   // "BUYER", "SELLER", "ADMIN" (전체 관리자)
   companyName       String
+  businessNumber    String?  // [추가됨] 사업자등록번호 (SELLER는 필수, BUYER는 선택)
   jobTitle          String   
-  phone             String   
+  phone             String  
+  rejectionReason String? 
   
   // [수정] 마스터/멤버 구분 및 승인 시스템
-  isMaster          Boolean  @default(false)     // 마스터 여부 (최초 가입자 등)
+  isMaster          Boolean  @default(false)      // 마스터 여부 (최초 가입자 등)
   approvalStatus    String   @default("APPROVED") // "PENDING", "APPROVED", "REJECTED"
 
   userType          String?  
@@ -59,7 +61,7 @@ model Meeting {
   timeSlotId            Int
   buyer                 User     @relation("BuyerMeetings", fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId               Int
-  seller                User     @relation("SellerMeetings", fields: [sellerId], references: [id], onDelete: Cascade)
+  seller                User     @relation("SellerMeetings", fields:[sellerId], references: [id], onDelete: Cascade)
   sellerId              Int
   createdAt             DateTime @default(now())
 }

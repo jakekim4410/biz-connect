@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -26,6 +25,12 @@ export default function LoginPage() {
           setError("메일주소가 다르거나 가입하지 않은 메일주소입니다.");
         } else if (res.error === "IncorrectPassword") {
           setError("비밀번호가 틀립니다.");
+        } else if (res.error === "PendingApproval") {
+          // 👇 추가된 부분: 승인 대기 중인 계정 처리
+          setError("관리자 승인 대기 중입니다. 승인 완료 후 로그인 가능합니다."); 
+        } else if (res.error === "RejectedAccount") {
+          // 👇 추가된 부분: 승인 거절된 계정 처리
+          setError("가입이 거절된 계정입니다. 관리자에게 문의해주세요."); 
         } else {
           setError("로그인 중 오류가 발생했습니다.");
         }
@@ -34,10 +39,12 @@ export default function LoginPage() {
         const sessionRes = await fetch("/api/auth/session");
         const sessionData = await sessionRes.json();
         const role = sessionData?.user?.role;
+        
         if (role === "ADMIN") router.push("/admin");
         else if (role === "BUYER") router.push("/buyer");
         else if (role === "SELLER") router.push("/seller");
         else router.push("/");
+        
         router.refresh();
       }
     } catch (err) {
