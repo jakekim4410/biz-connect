@@ -3,16 +3,43 @@
 import { saveOnePager } from "./actions";
 import { useState } from "react";
 import { 
-  Upload, FileCheck, Loader2, ChevronLeft, Sparkles, 
+  Upload, FileCheck, Loader2, ChevronLeft, ChevronDown, Sparkles, 
   Target, Lightbulb, TrendingUp, Briefcase, Mail, Building2, User, AlertCircle, FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+// 스타트업 씬 대표 카테고리 리스트
+const INDUSTRY_CATEGORIES = [
+  "인공지능 (AI & Big Data)",
+  "핀테크 (Fintech)",
+  "바이오/헬스케어 (Bio & Healthcare)",
+  "이커머스/물류 (E-commerce & Logistics)",
+  "에듀테크 (Edtech)",
+  "모빌리티/자율주행 (Mobility & Auto)",
+  "프롭테크/부동산 (Proptech)",
+  "SaaS/B2B 솔루션 (SaaS & B2B)",
+  "ESG/클린테크 (ESG & Cleantech)",
+  "로보틱스/딥테크 (Robotics & Deeptech)",
+  "콘텐츠/엔터테인먼트 (Content & Entertainment)",
+  "기타 (Others)"
+];
+
 export default function OnePagerForm({ initialData }: { initialData?: any }) {
   const [loading, setLoading] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const router = useRouter();
+
+  // 기존 데이터 중 산업 분야(industrySector) 세팅
+  const existingIndustry = initialData?.industrySector || "";
+  const isExistingCustom = existingIndustry && !INDUSTRY_CATEGORIES.includes(existingIndustry);
+
+  const [selectedIndustry, setSelectedIndustry] = useState(
+    isExistingCustom ? "기타 (Others)" : existingIndustry || ""
+  );
+  const [customIndustry, setCustomIndustry] = useState(
+    isExistingCustom ? existingIndustry : ""
+  );
 
   // 파일 선택 시 이벤트 핸들러
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,23 +230,79 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
             </h3>
             
             <div className="space-y-6 relative z-10">
-              {[
-                { name: "primaryTech", label: "주요 기술 | Primary Tech", placeholder: "e.g. AI, Robotics" },
-                { name: "industrySector", label: "산업 분야 | Industry Sector", placeholder: "e.g. K-culture, Beauty" },
-                { name: "yearFounded", label: "설립 연도 | Year Founded", placeholder: "YYYY (e.g. 2024)" },
-                { name: "investmentStage", label: "투자 단계 | Investment Stage", placeholder: "e.g. Seed / Series A" },
-              ].map((field) => (
-                <div key={field.name} className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">{field.label}</label>
-                  <input name={field.name} defaultValue={initialData?.[field.name]} className="w-full bg-slate-800/50 border-none px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl placeholder:text-slate-700" placeholder={field.placeholder} />
+              
+              {/* 주요 기술 */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">주요 기술 | Primary Tech</label>
+                <input name="primaryTech" defaultValue={initialData?.primaryTech} className="w-full bg-slate-800/50 border-none px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl placeholder:text-slate-700" placeholder="e.g. AI, Robotics" />
+              </div>
+
+              {/* 🚀 산업 분야 드롭다운 + 커스텀 입력 */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">산업 분야 | Industry Sector</label>
+                <div className="relative">
+                  <select
+                    value={selectedIndustry}
+                    onChange={(e) => {
+                      setSelectedIndustry(e.target.value);
+                      if (e.target.value !== "기타 (Others)") {
+                        setCustomIndustry(""); 
+                      }
+                    }}
+                    required
+                    className="w-full bg-slate-800/50 border-none px-4 py-3 pr-10 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled className="text-slate-500">
+                      카테고리를 선택해주세요
+                    </option>
+                    {INDUSTRY_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="bg-slate-900 text-white">
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-slate-400">
+                    <ChevronDown size={14} />
+                  </div>
                 </div>
-              ))}
+
+                {/* '기타 (Others)' 선택 시만 나타나는 인풋창 */}
+                {selectedIndustry === "기타 (Others)" && (
+                  <input
+                    type="text"
+                    required
+                    placeholder="직접 입력 (e.g. Space Tech, Web3)"
+                    value={customIndustry}
+                    onChange={(e) => setCustomIndustry(e.target.value)}
+                    className="w-full mt-2 bg-slate-800/50 border border-indigo-500/30 px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl animate-in fade-in slide-in-from-top-2 placeholder:text-slate-600"
+                  />
+                )}
+                
+                {/* 실제 서버로 넘어가는 데이터 (Hidden) */}
+                <input 
+                  type="hidden" 
+                  name="industrySector" 
+                  value={selectedIndustry === "기타 (Others)" ? customIndustry : selectedIndustry} 
+                />
+              </div>
+
+              {/* 설립 연도 */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">설립 연도 | Year Founded</label>
+                <input name="yearFounded" defaultValue={initialData?.yearFounded} className="w-full bg-slate-800/50 border-none px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl placeholder:text-slate-700" placeholder="YYYY (e.g. 2024)" />
+              </div>
+
+              {/* 투자 단계 */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">투자 단계 | Investment Stage</label>
+                <input name="investmentStage" defaultValue={initialData?.investmentStage} className="w-full bg-slate-800/50 border-none px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl placeholder:text-slate-700" placeholder="e.g. Seed / Series A" />
+              </div>
 
               {/* 월 매출 규모 */}
               <div className="space-y-2">
                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 block">월 매출 규모 | Monthly Revenue</label>
                 <input name="monthlyRevenue" defaultValue={initialData?.monthlyRevenue} className="w-full bg-slate-800/50 border-none px-4 py-3 text-xs font-bold text-slate-200 outline-none focus:bg-slate-800 transition-all rounded-2xl placeholder:text-slate-700" placeholder="$ 10,000" />
-                <p className="text-[10px] text-indigo-400 font-bold italic ml-1 leading-tight">* US달러($) 기준 작성 (Write in USD)</p>
+                <p className="text-[10px] text-indigo-400 font-bold italic ml-1 leading-tight mt-1">* US달러($) 기준 작성 (Write in USD)</p>
               </div>
 
               {/* 피치덱 업로드 */}
@@ -269,7 +352,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
             </div>
           </div>
           
-          {/* 하단 안내 문구 박스 (다크 카드 바깥으로 위치 수정 완료) */}
+          {/* 하단 안내 문구 박스 */}
           <div className="p-6 bg-white/50 backdrop-blur rounded-[32px] border border-slate-200 flex items-start gap-3 shadow-sm">
             <AlertCircle size={18} className="text-indigo-400 shrink-0 mt-0.5" />
             <p className="text-[11px] font-medium text-slate-500 leading-normal whitespace-pre-line">

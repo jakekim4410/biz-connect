@@ -4,11 +4,15 @@ import { useState, useEffect } from "react";
 import { registerUserAction, checkExistingCompanyAction } from "./action";
 
 export default function RegisterPage() {
+  // [추가됨] 계정 유형(role)을 상태로 관리하여 동적으로 제어
+  const [role, setRole] = useState("BUYER");
+  const [isRoleLocked, setIsRoleLocked] = useState(false); // 역할이 기존 회사에 의해 고정되었는지 여부
+
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState(""); // 성함 상태
+  const [name, setName] = useState(""); 
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [selectedType, setSelectedType] = useState("VC");
@@ -18,7 +22,6 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
 
-  // 회사 검증 관련
   const [similarCompanies, setSimilarCompanies] = useState<any[]>([]);
   const [isSameCompanyConfirmed, setIsSameCompanyConfirmed] = useState(false);
 
@@ -31,7 +34,6 @@ export default function RegisterPage() {
     setPhone(formatted);
   };
 
-  // 실시간 회사 검색 (성함과는 무관하게 동작)
   useEffect(() => {
     const searchTimer = setTimeout(async () => {
       if (companyName.length >= 2 && !isSameCompanyConfirmed) {
@@ -55,6 +57,12 @@ export default function RegisterPage() {
           setError("");
           setIsPending(true);
           const formData = new FormData(e.currentTarget);
+          
+          // [추가됨] select disabled 일 경우 FormData에 값이 안담기므로 수동으로 추가
+          if (isRoleLocked) {
+            formData.set("role", role);
+          }
+
           const result = await registerUserAction(formData);
           if (result?.error) {
             setError(result.error);
@@ -75,12 +83,25 @@ export default function RegisterPage() {
         )}
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
+          
+          {/* [수정됨] 계정 유형 셀렉트 - 고정 상태 UI 피드백 반영 */}
+          <div className="col-span-2 relative">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1">계정 유형</label>
-            <select name="role" className="w-full p-4 bg-slate-50 rounded-2xl border mt-1 font-bold outline-none">
+            <select 
+              name="role" 
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              disabled={isRoleLocked}
+              className={`w-full p-4 rounded-2xl border mt-1 font-bold outline-none transition-all ${isRoleLocked ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : 'bg-slate-50 border-slate-200'}`}
+            >
               <option value="BUYER">투자자 (VC, AC, BUYER)</option>
               <option value="SELLER">스타트업 (STARTUP)</option>
             </select>
+            {isRoleLocked && (
+              <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">
+                🔒 선택하신 회사의 전용 계정 유형으로 고정되었습니다.
+              </p>
+            )}
           </div>
 
           <input name="email" type="email" placeholder="이메일 주소" required value={email} onChange={(e) => setEmail(e.target.value)} className="col-span-2 md:col-span-1 p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500" />
@@ -105,6 +126,7 @@ export default function RegisterPage() {
               onChange={(e) => {
                 setCompanyName(e.target.value);
                 setIsSameCompanyConfirmed(false);
+                setIsRoleLocked(false); // [추가됨] 회사명을 수정하면 역할 고정 해제
               }} 
               className={`w-full p-4 bg-slate-50 rounded-2xl border focus:outline-blue-500 ${isSameCompanyConfirmed ? 'border-emerald-500 bg-emerald-50/30' : ''}`} 
             />
@@ -118,16 +140,25 @@ export default function RegisterPage() {
                       key={comp.companyName}
                       type="button"
                       onClick={() => {
-                        setCompanyName(comp.companyName); // 회사명만 가져옴
+                        setCompanyName(comp.companyName); 
                         setIsSameCompanyConfirmed(true);
                         setSimilarCompanies([]);
-                        // 성함(name)은 건드리지 않음
+                        
+                        // [추가됨] 기존 회사를 선택하면 해당 회사의 역할(role)로 자동 설정하고 변경 불가 처리
+                        if (comp.role) {
+                          setRole(comp.role);
+                          setIsRoleLocked(true);
+                        }
                       }}
-                      className="flex justify-between items-center p-4 hover:bg-blue-50 rounded-2xl border border-slate-50 transition-all text-left"
+                      className="flex justify-between items-center p-4 hover:bg-blue-50 rounded-2xl border border-slate-50 transition-all text-left group"
                     >
                       <div className="min-w-0">
-                        <span className="font-black text-sm text-slate-800 block">{comp.companyName}</span>
-                        <p className="text-[10px] text-slate-400">기존 가입자 확인용: {comp.name}님</p>
+                        <span className="font-black text-sm text-slate-800 block group-hover:text-blue-700">{comp.companyName}</span>
+                        <p className="text-[10px] text-slate-400">
+                          기존 가입자 확인용: {comp.name}님
+                          {/* [추가됨] UI 표시 (투자자/스타트업) */}
+                          <span className="ml-2 font-bold text-blue-500">{comp.role === "BUYER" ? "[투자자]" : "[스타트업]"}</span>
+                        </p>
                       </div>
                       <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-lg">선택</span>
                     </button>
@@ -140,7 +171,6 @@ export default function RegisterPage() {
             )}
           </div>
 
-          {/* 성함 필드 (독립적 입력) */}
           <div className="col-span-2 md:col-span-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1">가입자 성함 (Full Name)</label>
             <input name="name" placeholder="실명을 입력하세요" required value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border outline-none focus:ring-2 ring-blue-500/20" />

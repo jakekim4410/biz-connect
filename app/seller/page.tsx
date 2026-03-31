@@ -9,7 +9,6 @@ export default async function SellerPage() {
   if (!session || (session.user as any).role !== "SELLER") redirect("/login");
   const sellerId = Number((session.user as any).id);
 
-  // 1. 현재 유저 상세 정보 (isMaster, approvalStatus 확인용)
   const user = await db.user.findUnique({
     where: { id: sellerId },
     include: { onePager: true }
@@ -17,35 +16,50 @@ export default async function SellerPage() {
 
   if (!user) redirect("/login");
 
-  // 2. 확정된 미팅 (ACCEPTED)
+  // 확정된 미팅
   const confirmedMeetings = await db.meeting.findMany({
-    where: { sellerId, status: "ACCEPTED" },
+    where: { 
+      sellerId, 
+      status: { in: ["ACCEPTED", "CONFIRMED"] } 
+    },
     include: { timeSlot: true, buyer: true },
     orderBy: { timeSlot: { startTime: 'asc' } }
   });
 
-  // 3. 신청 대기 중인 미팅 (PENDING)
+  // 신청 대기 중인 미팅 (PENDING)
   const pendingMeetings = await db.meeting.findMany({
     where: { sellerId, status: "PENDING" },
     include: { timeSlot: true, buyer: true },
     orderBy: { createdAt: 'desc' }
   });
 
-  // 4. 거절된 미팅 (REJECTED)
+  // 거절/취소된 미팅
   const rejectedMeetings = await db.meeting.findMany({
-    where: { sellerId, status: "REJECTED" },
+    where: { 
+      sellerId, 
+      status: { in: ["REJECTED", "CANCELLED"] } 
+    },
     include: { timeSlot: true, buyer: true },
     orderBy: { createdAt: 'desc' }
   });
 
-  // 5. 신청 가능한 새로운 슬롯 (OPEN + 내가 신청 안 한 것)
+  /**
+   * [핵심 수정] 신청 가능한 새로운 슬롯 조회 시,
+   * 이미 해당 슬롯에 신청한 다른 유저들의 정보를 포함(include)하여 가져옵니다.
+   * 클라이언트에서 내 소속(companyName)과 비교하기 위함입니다.
+   */
   const availableSlots = await db.timeSlot.findMany({
     where: { status: "OPEN", NOT: { meetings: { some: { sellerId } } } },
-    include: { buyer: true },
+    include: { 
+      buyer: true,
+      meetings: {
+        include: { seller: true } // 해당 슬롯에 신청한 다른 셀러 정보 포함
+      }
+    },
     orderBy: { startTime: 'asc' }
   });
 
-  // 6. [마스터 전용] 멤버 데이터 조회
+  // [마스터 전용] 멤버 데이터 조회
   let pendingMembers: any[] = [];
   let approvedMembers: any[] = [];
 

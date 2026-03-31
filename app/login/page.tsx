@@ -19,8 +19,16 @@ export default function LoginPage() {
 
     try {
       const res = await signIn("credentials", { email, password, redirect: false });
+      
       if (res?.error) {
-        setError("이메일 또는 비밀번호가 일치하지 않습니다.");
+        // 백엔드(NextAuth)에서 던져주는 에러 메시지에 따라 분기 처리
+        if (res.error === "UserNotFound") {
+          setError("메일주소가 다르거나 가입하지 않은 메일주소입니다.");
+        } else if (res.error === "IncorrectPassword") {
+          setError("비밀번호가 틀립니다.");
+        } else {
+          setError("로그인 중 오류가 발생했습니다.");
+        }
         setIsLoading(false);
       } else {
         const sessionRes = await fetch("/api/auth/session");
@@ -33,7 +41,7 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err) {
-      setError("로그인 중 오류가 발생했습니다.");
+      setError("로그인 처리 중 문제가 발생했습니다.");
       setIsLoading(false);
     }
   };
@@ -79,6 +87,13 @@ export default function LoginPage() {
               className={`w-full py-4 rounded-2xl font-black text-white transition-all duration-300 shadow-xl flex items-center justify-center gap-3
                 ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}`}
             >
+              {/* 로딩 중일 때 스피너 SVG 렌더링 */}
+              {isLoading && (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
               <span>{isLoading ? "로그인 중..." : "로그인"}</span>
             </button>
           </form>

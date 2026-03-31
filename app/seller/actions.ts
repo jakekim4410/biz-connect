@@ -85,20 +85,42 @@ export async function transferMasterRole(newMasterId: number) {
   }
 }
 
-// 4. 거절된 유저 재신청
-export async function reRequestApprovalAction() {
+// 4. 거절된 유저 정보 수정 및 재신청 [이 부분 기능이 업그레이드 되었습니다]
+export async function reRequestApprovalAction(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "로그인이 필요합니다." };
   
   const userId = Number((session.user as any).id);
+
+  // 폼에서 입력받은 수정된 정보 가져오기
+  const name = formData.get("name") as string;
+  const jobTitle = formData.get("jobTitle") as string;
+  const phone = formData.get("phone") as string;
+  const companyName = formData.get("companyName") as string;
+
+  if (!name || !jobTitle || !phone || !companyName) {
+    return { error: "수정할 정보를 모두 입력해주세요." };
+  }
   
-  await db.user.update({
-    where: { id: userId },
-    data: { approvalStatus: "PENDING" }
-  });
-  
-  revalidatePath("/seller");
-  return { success: true };
+  try {
+    // 유저 정보 업데이트 및 상태를 다시 대기(PENDING)로 변경
+    await db.user.update({
+      where: { id: userId },
+      data: { 
+        name,
+        jobTitle,
+        phone,
+        companyName,
+        approvalStatus: "PENDING" 
+      }
+    });
+    
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (error) {
+    console.error("재신청 오류:", error);
+    return { error: "정보 수정 및 재신청 처리 중 오류가 발생했습니다." };
+  }
 }
 
 // 5. 원페이저 저장 및 전사 동기화
