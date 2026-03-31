@@ -7,8 +7,8 @@ import {
   handleMemberStatus, 
   transferMasterRole, 
   reRequestApprovalAction,
-  checkExistingCompanyAction, // 👈 추가됨
-  checkExistingBusinessNumberAction // 👈 추가됨
+  checkExistingCompanyAction,
+  checkExistingBusinessNumberAction
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import { respondLocationChange } from "../buyer/actions";
@@ -22,7 +22,7 @@ import {
 import * as XLSX from 'xlsx';
 
 // ---------------------------------------------------------------------------
-// [1] 거절 화면 및 정보 수정 폼 컴포넌트 (👇 회사명, 사업자번호 검색 및 연동 로직 적용)
+// [1] 거절 화면 및 정보 수정 폼 컴포넌트
 // ---------------------------------------------------------------------------
 function RejectedScreen({ user }: { user: any }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -32,12 +32,11 @@ function RejectedScreen({ user }: { user: any }) {
   const [selectedType, setSelectedType] = useState(user?.userType || "스타트업");
   const [userTypeDetail, setUserTypeDetail] = useState(user?.userTypeDetail || "");
 
-  // 👇 추가됨: 회사명, 사업자번호 검색 및 자동 완성 상태 관리
   const [companyName, setCompanyName] = useState(user?.companyName || "");
   const [businessNumber, setBusinessNumber] = useState(user?.businessNumber || "");
   const [similarCompanies, setSimilarCompanies] = useState<any[]>([]);
-  const [isSameCompanyConfirmed, setIsSameCompanyConfirmed] = useState(true); // 수정 전엔 기존 회사로 취급
-  const [isRoleLocked, setIsRoleLocked] = useState(user?.businessNumber ? true : false); // 처음엔 잠겨있을 수 있음
+  const [isSameCompanyConfirmed, setIsSameCompanyConfirmed] = useState(true); 
+  const [isRoleLocked, setIsRoleLocked] = useState(user?.businessNumber ? true : false); 
   const [phone, setPhone] = useState(user?.phone || "");
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,7 +89,7 @@ function RejectedScreen({ user }: { user: any }) {
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    formData.set("businessNumber", businessNumber); // 잠겨있을 수 있으므로 강제 세팅
+    formData.set("businessNumber", businessNumber); 
 
     const result = await reRequestApprovalAction(formData);
 
@@ -118,7 +117,6 @@ function RejectedScreen({ user }: { user: any }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* 👇 변경됨: 회사명 자동 검색 UI */}
             <div className="space-y-2 md:col-span-2 relative">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회사명 (Company Name)</label>
               <input 
@@ -179,14 +177,13 @@ function RejectedScreen({ user }: { user: any }) {
               )}
             </div>
 
-            {/* 👇 추가됨: 사업자등록번호 잠금 연동 */}
             <div className="space-y-2 md:col-span-2">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">사업자등록번호 (Business Number)</label>
               <input
                 name="businessNumber"
                 placeholder="000-00-00000 (숫자만 입력)"
                 maxLength={12}
-                required={user?.role === "SELLER"} // 셀러일 경우 필수
+                required={user?.role === "SELLER"}
                 value={businessNumber}
                 onChange={handleBusinessNumberChange}
                 disabled={isRoleLocked}
@@ -320,6 +317,24 @@ export default function SellerClient({
     confirmed: 0,
     rejected: 0,
   });
+
+  // 👇 [추가됨] 승인된 팀 멤버를 정렬 (마스터 최상단, 이후 가입순)
+  const sortedApprovedMembers = useMemo(() => {
+    if (!approvedMembers) return [];
+    return [...approvedMembers].sort((a: any, b: any) => {
+      // 1. 마스터(현재 팀 관리 화면을 보는 본인)를 최상단으로
+      const isMasterA = a.id === user?.id;
+      const isMasterB = b.id === user?.id;
+
+      if (isMasterA && !isMasterB) return -1;
+      if (!isMasterA && isMasterB) return 1;
+
+      // 2. 가입순 (생성일자 기준 오름차순 - 먼저 가입한 사람이 위로)
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeA - timeB;
+    });
+  }, [approvedMembers, user?.id]);
 
   const isOnePagerCompleted = useMemo(() => {
     if (!hasOnePager) return false;
@@ -861,7 +876,8 @@ export default function SellerClient({
                     </p>
                   </div>
 
-                  {approvedMembers.map((m: any) => (
+                  {/* 👇 [수정됨] 정렬된 sortedApprovedMembers를 매핑하여 렌더링 */}
+                  {sortedApprovedMembers.map((m: any) => (
                     <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex items-center justify-between gap-3 border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-3 md:gap-4 min-w-0">
                         <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-black text-base md:text-lg ${m.id === user.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
@@ -931,6 +947,8 @@ export default function SellerClient({
                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">바이어 (Buyer)</th>
                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">선호 파트너 (Interests)</th>
                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">희망 일시 (Date & Time)</th>
+                         {/* 👇 [추가됨] 장소 헤더 추가 */}
+                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">장소 (Location)</th>
                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">상태 / 액션</th>
                        </tr>
                      </thead>
@@ -968,6 +986,15 @@ export default function SellerClient({
                                  <p className="text-xs font-black text-slate-700">{formatDateWithDay(slot.startTime)}</p>
                                  <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(slot.startTime)}</p>
                               </td>
+                              {/* 👇 [추가됨] 장소 데이터 셀 추가 */}
+                              <td className="px-6 py-5">
+                                 <div className="flex items-center gap-1.5">
+                                   <MapPin size={14} className="text-rose-400 shrink-0"/>
+                                   <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
+                                     {slot.location || "미지정 (운영팀 안내 예정)"}
+                                   </span>
+                                 </div>
+                              </td>
                               <td className="px-6 py-5 text-right">
                                  <div className="flex flex-col items-end gap-2.5">
                                    {colleagueMeeting && (
@@ -988,7 +1015,8 @@ export default function SellerClient({
                        })}
                        {availableSlots.length === 0 && (
                          <tr>
-                           <td colSpan={4} className="px-6 py-16 text-center text-slate-400 font-bold text-sm bg-slate-50/50">
+                           {/* 👇 [수정됨] colSpan을 4에서 5로 변경 */}
+                           <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-bold text-sm bg-slate-50/50">
                              현재 신청 가능한 미팅 슬롯이 없습니다.
                            </td>
                          </tr>
