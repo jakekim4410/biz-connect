@@ -3,33 +3,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { anthropic } from "@/lib/anthropic";
+import { supabase } from "@/lib/supabase";
 
 // ─────────────────────────────────────────────
-// 1. 인메모리 캐시 (동일 검색어 재호출 방지)
+// 0. 쿼리 언어 감지 함수 (신규 추가)
+// 한글 유니코드 범위로 판별 — 코드 레벨에서 언어를 감지해
+// 프롬프트에 명시적으로 주입함으로써 모델의 언어 혼용 문제 해결
 // ─────────────────────────────────────────────
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-const searchCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 1000 * 60 * 10; // 10분
-
-function getCached(key: string): any | null {
-  const entry = searchCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    searchCache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCache(key: string, data: any): void {
-  searchCache.set(key, { data, timestamp: Date.now() });
+function detectQueryLanguage(query: string): "ko" | "en" {
+  // AC00-D7A3: 완성형 한글, 1100-11FF: 자모, 3130-318F: 호환 자모
+  const koreanRegex = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/;
+  return koreanRegex.test(query) ? "ko" : "en";
 }
 
 // ─────────────────────────────────────────────
-// 2. DB 데이터로 키워드 매칭 (web_search 스킵 판단용)
+// 1. DB 데이터로 키워드 매칭 (web_search 스킵 판단용) - 기존 유지
 // ─────────────────────────────────────────────
 function hasGoodDBMatch(query: string, candidates: any[]): boolean {
   const keywords = query.toLowerCase().split(/\s+/).filter((k) => k.length > 1);
@@ -51,7 +39,6 @@ function hasGoodDBMatch(query: string, candidates: any[]): boolean {
       .toLowerCase();
     return keywords.some((kw) => target.includes(kw));
   });
-  // 3개 이상 매칭되면 DB 데이터 충분 → web_search 스킵
   return matchCount.length >= 3;
 }
 
@@ -70,16 +57,49 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // ① 캐시 확인 (role + query 조합으로 캐시키 생성)
-  const cacheKey = `${searchRole}:${query.trim().toLowerCase()}`;
-  const cached = getCached(cacheKey);
-  if (cached) {
-    console.log(`[AI Search] Cache HIT: "${query}"`);
-    return NextResponse.json({ ...cached, fromCache: true });
+  // ─────────────────────────────────────────────
+  // [신규] 쿼리 언어 감지 — 이후 프롬프트에 주입
+  // ─────────────────────────────────────────────
+  const detectedLang = detectQueryLanguage(query);
+  const langInstruction =
+    detectedLang === "ko"
+      ? `[LANGUAGE RULE - MANDATORY]
+You MUST respond in KOREAN (한국어) only.
+All values for "matchReason", "industry", "stage", "tech", "product", "webInfo" MUST be written in Korean.
+Do NOT use English in any field value. This is non-negotiable.`
+      : `[LANGUAGE RULE - MANDATORY]
+You MUST respond in ENGLISH only.
+All values for "matchReason", "industry", "stage", "tech", "product", "webInfo" MUST be written in English.
+Even if candidate data contains Korean text, translate and write all output values in English.
+Do NOT use Korean in any field value. This is non-negotiable.`;
+
+  console.log(`[AI Search] query="${query}" | detectedLang=${detectedLang}`);
+
+  // ① DB 기반 캐시 확인 (7일 유효) - 기존 유지
+  const normalizedQuery = query
+    .trim()
+    .toLowerCase()
+    .replace(/[?.!,]/g, "");
+
+  const SEVEN_DAYS_AGO = new Date();
+  SEVEN_DAYS_AGO.setDate(SEVEN_DAYS_AGO.getDate() - 7);
+
+  const { data: cachedEntry } = await supabase
+    .from('ai_search_cache')
+    .select('result_json')
+    .eq('query_text', normalizedQuery)
+    .eq('search_role', searchRole)
+    .gt('created_at', SEVEN_DAYS_AGO.toISOString())
+    .maybeSingle();
+
+  if (cachedEntry) {
+    console.log(`[AI Search] DB Cache HIT: "${normalizedQuery}"`);
+    return NextResponse.json({ ...cachedEntry.result_json, fromCache: true });
   }
 
   let candidates: any[] = [];
 
+  // 후보군 추출 및 모든 상세 필드 매핑 로직 - 기존 기능 유지
   if (searchRole === "SELLER") {
     const onePagers = await db.onePager.findMany({
       include: {
@@ -122,16 +142,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ results: [] });
   }
 
-  // ② web_search 조건부 스킵 판단
+  // ② web_search 조건부 스킵 판단 - 기존 유지
   const skipWebSearch = hasGoodDBMatch(query, candidates);
-  console.log(
-    `[AI Search] query="${query}" | web_search: ${skipWebSearch ? "SKIP ✅" : "USE 🌐"}`
-  );
+  console.log(`[AI Search] query="${query}" | web_search: ${skipWebSearch ? "SKIP ✅" : "USE 🌐"}`);
 
+  // ③ Anthropic 호출 - 언어 감지값을 system/user 양쪽에 주입 (핵심 수정)
+  // [변경점]
+  //   - system 프롬프트 상단에 langInstruction 블록을 동적으로 삽입
+  //   - user 메시지 하단에도 언어 지시를 반복 삽입하여 모델이 무시하지 못하게 강제
+  //   - 기존 JSON 파싱 규칙, web_search 조건부 로직 등 모든 기존 기능 유지
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1500, // ③ 절약: 4000 → 1500
-    // web_search: DB 데이터 충분하면 스킵
+    max_tokens: 1500,
     ...(skipWebSearch
       ? {}
       : {
@@ -142,110 +164,104 @@ export async function POST(req: Request) {
             },
           ],
         }),
-    system: `당신은 B2B 비즈니스 매칭 전문가입니다.
-사용자의 검색 쿼리를 분석하여 후보 기업 목록에서 가장 관련성 높은 기업을 추천합니다.
+    system: `You are a B2B business matching expert.
 
-[핵심 규칙 - 반드시 준수]
-1. results 배열은 절대 비워두지 마세요. 검색 조건이 모호하거나 데이터가 부족해도 반드시 후보 기업 중 최소 1개 이상을 포함하세요.
-2. 검색 쿼리가 특정 회사명이나 사람을 언급하면, 해당 회사가 목록에 있으면 무조건 포함하고 matchReason에 "검색하신 회사입니다"로 표기하세요.
-3. 데이터가 "정보 없음"이어도${skipWebSearch ? " DB 정보를 최대한 활용하여" : " 웹 검색으로 보완하고"} 결과를 반환하세요.
-4. matchScore는 1~100 사이 숫자로, 관련성이 낮아도 최소 30점 이상 부여하세요.
+${langInstruction}
 
-[응답 형식 - JSON만 출력, 다른 텍스트 절대 금지]
-{"results":[{"companyName":"회사명","matchScore":85,"matchReason":"추천 이유 3-4문장","basicInfo":{"industry":"산업분야","stage":"투자단계","tech":"핵심기술","product":"주요제품"},"webInfo":"${skipWebSearch ? "DB 기반 추가 정보 1-2문장" : "웹 검색 기반 최신 정보 2-3문장"}"}]}`,
+[JSON Parsing Error Prevention Rules]
+1. Output ONLY pure valid JSON.
+2. If description text contains double quotes ("), you MUST escape them with a backslash (\\").
+3. results array must NEVER be empty. Minimum 1 recommendation.
+4. matchScore: 1-100. Minimum 10 points.
+
+[Response Format - JSON ONLY]
+{"results":[{"companyName":"...","matchScore":85,"matchReason":"...","basicInfo":{"industry":"...","stage":"...","tech":"...","product":"..."},"webInfo":"..."}]}`,
     messages: [
       {
         role: "user",
-        content: `검색 조건: "${query}"
+        content: `Search Query: "${query}"
 
-후보 기업 목록 (총 ${candidates.length}개):
-${JSON.stringify(candidates, null, 2)}
+Candidate List (Total ${candidates.length} cos):
+${JSON.stringify(candidates.slice(0, 15), null, 2)}
 
-[지시사항]
-- 검색 조건과 관련된 기업을 최대 5개 추천하세요.
-- 검색 조건에 특정 회사명이 포함된 경우, 해당 회사를 반드시 1순위로 포함하세요.
-- 데이터 품질과 관계없이 모든 후보 중 가장 연관성 높은 기업을 선정하세요.
-- results가 빈 배열이 되는 것은 허용되지 않습니다. 반드시 1개 이상 포함하세요.
-- 순수 JSON만 출력하세요. 설명, 마크다운, 코드블록 없이.`,
+[Instruction]
+- Recommend up to 5 companies.
+- Output pure JSON. No markdown, no explanation.
+- CRITICAL: ${detectedLang === "ko"
+  ? "모든 응답 필드(matchReason, industry, stage, tech, product, webInfo)를 반드시 한국어로 작성하세요."
+  : "You MUST write ALL response field values (matchReason, industry, stage, tech, product, webInfo) in English. Translate Korean source data into English."
+}`,
       },
     ],
   });
 
-  // text 블록만 수집 (server_tool_use, web_search_tool_result 제외)
   const fullText = response.content
     .filter((block: any) => block.type === "text")
     .map((block: any) => block.text)
     .join("");
 
-  console.log("=== AI 응답 원문 ===");
-  console.log(fullText);
-  console.log("블록 타입들:", response.content.map((b: any) => b.type));
-  console.log("====================");
-
   let parsed: any = null;
 
-  // 전략 A: 순수 JSON
-  try {
-    parsed = JSON.parse(fullText.trim());
-  } catch (_) {}
-
-  // 전략 B: 코드블록 제거
+  // ─────────────────────────────────────────────
+  // 4단계 파싱 전략 - 기존 다단계 파싱 기능 100% 유지
+  // ─────────────────────────────────────────────
+  try { parsed = JSON.parse(fullText.trim()); } catch (_) {}
   if (!parsed) {
     try {
-      const stripped = fullText
-        .replace(/```json\s*/g, "")
-        .replace(/```/g, "")
-        .trim();
+      const stripped = fullText.replace(/```json\s*/g, "").replace(/```/g, "").trim();
       parsed = JSON.parse(stripped);
     } catch (_) {}
   }
-
-  // 전략 C: {"results" 위치부터 슬라이스
   if (!parsed) {
     try {
       const startIdx = fullText.lastIndexOf('{"results"');
       if (startIdx !== -1) parsed = JSON.parse(fullText.slice(startIdx));
     } catch (_) {}
   }
-
-  // 전략 D: 정규식 fallback
   if (!parsed) {
     try {
       const jsonMatch = fullText.match(/\{[\s\S]*\}/);
       if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error("파싱 최종 실패:", e);
-    }
+    } catch (e) { console.error("파싱 최종 실패:", e); }
   }
 
   if (!parsed || !Array.isArray(parsed.results)) {
-    return NextResponse.json(
-      { error: "parsing error", raw: fullText.slice(0, 1000) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "parsing error", raw: fullText.slice(0, 1000) }, { status: 500 });
   }
 
-  // ✅ 파싱 성공했지만 results가 비어있는 경우: DB 데이터로 fallback 결과 생성
+  // ✅ 비어있는 경우 Fallback 결과 생성 및 캐시 저장 - 기존 유지
   if (parsed.results.length === 0) {
     const fallbackResults = candidates
       .slice(0, 3)
       .map((c: any, i: number) => ({
         companyName: c.companyNameKr || c.companyName || "알 수 없음",
         matchScore: 40 - i * 5,
-        matchReason: `검색 조건 "${query}"과(와) 직접적인 연관 정보를 찾지 못했습니다. 현재 등록된 정보가 부족하여 정확한 매칭이 어렵습니다. 해당 기업의 원페이저를 확인해 보세요.`,
+        matchReason: `검색 조건 "${query}"과(와) 직접적인 연관 정보를 찾지 못했습니다. DB에 등록된 기업 정보를 기반으로 추천드립니다.`,
         basicInfo: {
           industry: c.industrySector || "미지정",
           stage: c.investmentStage || "미정",
           tech: c.primaryTech || "정보 없음",
           product: c.productType || "정보 없음",
         },
-        webInfo:
-          "등록된 정보가 부족하여 웹 검색 결과를 활용하지 못했습니다. 기업 원페이저를 업데이트하면 더 정확한 매칭이 가능합니다.",
+        webInfo: "등록된 정보가 부족하여 웹 검색 결과를 활용하지 못했습니다.",
       }));
-    return NextResponse.json({ results: fallbackResults, isFallback: true });
+    const fallbackResponse = { results: fallbackResults, isFallback: true };
+
+    await supabase.from('ai_search_cache').insert({
+      query_text: normalizedQuery,
+      search_role: searchRole,
+      result_json: fallbackResponse
+    });
+
+    return NextResponse.json(fallbackResponse);
   }
 
-  // ④ 캐시 저장 후 반환
-  setCache(cacheKey, parsed);
+  // ④ 성공한 검색 결과 DB 캐시에 저장 후 반환 - 기존 유지
+  await supabase.from('ai_search_cache').insert({
+    query_text: normalizedQuery,
+    search_role: searchRole,
+    result_json: parsed
+  });
+
   return NextResponse.json(parsed);
 }

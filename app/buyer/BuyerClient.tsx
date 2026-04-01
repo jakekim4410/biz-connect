@@ -1,4 +1,5 @@
 "use client";
+import AiSearchResultCard from "@/components/AiSearchResultCard";
 import { useI18n } from "@/lib/i18n"; // i18n 훅 임포트
 import { isCompanyMatch } from "@/lib/matchUtils";
 import { useState, useEffect, useMemo } from "react";
@@ -597,8 +598,31 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 </div>
               </div>
             )}
-
+{aiSearchMode && !aiLoading && aiSearched && (
+  <AiSearchResultCard
+    results={aiResults}
+    query={aiQuery}
+    isFallback={aiIsFallback}
+    error={aiError}
+    locale={locale}
+    isMatched={(companyName) =>
+      uniqueSellers.some((s: any) =>
+        isCompanyMatch(s.companyName || "", companyName) ||
+        isCompanyMatch(s.onePager?.companyNameKr || "", companyName) ||
+        isCompanyMatch(s.onePager?.companyNameEn || "", companyName)
+      )
+    }
+    onViewOnePager={(companyName) => {
+      const matched = uniqueSellers.find((s: any) =>
+        isCompanyMatch(s.companyName || "", companyName) ||
+        isCompanyMatch(s.onePager?.companyNameKr || "", companyName)
+      );
+      if (matched) setSelectedOnePager({ ...matched.onePager, user: matched, members: matched.members });
+    }}
+  />
+)}
             {/* 셀러 리스트 (반응형: 모바일 카드, 데스크탑 테이블) */}
+            {!aiSearchMode && (
             <div className="space-y-4">
               
               {/* [모바일] 카드 뷰: md 미만 노출 */}
@@ -712,6 +736,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 </div>
               )}
             </div>
+            )}
           </section>
         )}
 
