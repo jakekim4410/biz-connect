@@ -22,7 +22,7 @@ export async function sendMeetingConfirmationEmails(params: SendMeetingEmailPara
     await Promise.all([
       // 1. 바이어에게 보내는 메일
       resend.emails.send({
-        from: "BizConnect <onboarding@resend.dev>",
+        from: "BizConnect <info@labelk.co.kr>",
         to: params.buyerEmail, 
         subject: `[BizConnect] ${params.sellerName}님과의 미팅이 확정되었습니다.`,
         react: MeetingConfirmedEmail({
@@ -38,7 +38,7 @@ export async function sendMeetingConfirmationEmails(params: SendMeetingEmailPara
 
       // 2. 셀러에게 보내는 메일
       resend.emails.send({
-        from: "BizConnect <onboarding@resend.dev>", 
+        from: "BizConnect <info@labelk.co.kr>", // <--- 여기에 쉼표(,)를 추가했습니다!
         to: params.sellerEmail, 
         subject: `[BizConnect] ${params.buyerName}님과의 미팅이 확정되었습니다.`,
         react: MeetingConfirmedEmail({
