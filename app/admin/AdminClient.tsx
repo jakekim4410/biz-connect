@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import { 
   deleteUser, 
@@ -192,12 +192,12 @@ export default function AdminClient({ stats, users, timeSlots, meetings }: any) 
 
   if (!mounted) return null;
 
-  const navItems = [
-    { id: 'dashboard', label: '대시보드', sub: 'ANALYTICS', icon: <BarChart3 size={22}/> },
-    { id: 'users', label: '회원 관리', sub: 'USERS', icon: <Users size={22}/>, alert: analytics.statuses.PENDING > 0 },
-    { id: 'reservations', label: '슬롯 관리', sub: 'SLOTS', icon: <Calendar size={22}/> },
-    { id: 'matches', label: '매칭 관리', sub: 'MEETINGS', icon: <Handshake size={22}/> },
-  ];
+const navItems = [
+  { id: 'dashboard', label: '대시보드', sub: 'ANALYTICS', icon: <BarChart3 size={22}/> },
+  { id: 'users', label: '회원 관리', sub: 'USERS', icon: <Users size={22}/>, alert: analytics.statuses.PENDING > 0 },
+  { id: 'reservations', label: '슬롯 관리', sub: 'SLOTS', icon: <Calendar size={22}/> },
+  { id: 'matches', label: '매칭 관리', sub: 'MEETINGS', icon: <Handshake size={22}/> },
+];
 
   const getRoleBadge = (role: string) => {
     switch(role) {
@@ -221,30 +221,47 @@ export default function AdminClient({ stats, users, timeSlots, meetings }: any) 
     <div className={`space-y-6 md:space-y-10 pb-20 font-pretendard text-[#121926] text-left relative ${isProcessing ? 'opacity-50 pointer-events-none transition-opacity' : ''}`}>
       
       {/* --- 네비게이션 --- */}
-      <header className="bg-white/90 backdrop-blur-2xl p-3 md:p-6 rounded-[24px] md:rounded-[40px] shadow-lg md:shadow-xl border border-white sticky top-4 z-40">
-        <div className="flex flex-row md:flex-wrap md:justify-around gap-2 md:gap-4 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {navItems.map((item) => (
-            <button 
-              key={item.id} 
-              onClick={() => { setActiveTab(item.id); cancelEditing(); }} 
-              className={`relative flex flex-col items-center gap-1.5 p-2 md:p-3 transition-all duration-300 snap-center min-w-[75px] md:min-w-[90px] ${activeTab === item.id ? 'scale-105 md:scale-110' : ''}`}
-            >
-              {item.alert && (
-                <span className="absolute top-1 right-2 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full animate-pulse z-10 shadow-sm"></span>
-              )}
-              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors ${activeTab === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}`}>
-                {item.icon}
-              </div>
-              <div className="text-center mt-1">
-                  <span className={`text-[11px] md:text-[13px] font-black block leading-none ${activeTab === item.id ? 'text-slate-900' : 'text-slate-400'}`}>
-                    {item.label}
-                  </span>
-                  <span className="text-[9px] md:text-[10px] font-bold opacity-40 uppercase mt-1 block">{item.sub}</span>
-              </div>
-            </button>
-          ))}
+<header className="bg-white/90 backdrop-blur-2xl p-3 md:p-6 rounded-[24px] md:rounded-[40px] shadow-lg md:shadow-xl border border-white sticky top-4 z-40">
+  <div className="flex flex-row md:flex-wrap md:justify-around gap-2 md:gap-4 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    {navItems.map((item) => (
+      <button 
+        key={item.id} 
+        onClick={() => { setActiveTab(item.id); cancelEditing(); }} 
+        className={`relative flex flex-col items-center gap-1.5 p-2 md:p-3 transition-all duration-300 snap-center min-w-[75px] md:min-w-[90px] ${activeTab === item.id ? 'scale-105 md:scale-110' : ''}`}
+      >
+        {item.alert && (
+          <span className="absolute top-1 right-2 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full animate-pulse z-10 shadow-sm"></span>
+        )}
+        <div className={`w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors ${activeTab === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}`}>
+          {item.icon}
         </div>
-      </header>
+        <div className="text-center mt-1">
+          <span className={`text-[11px] md:text-[13px] font-black block leading-none ${activeTab === item.id ? 'text-slate-900' : 'text-slate-400'}`}>
+            {item.label}
+          </span>
+          <span className="text-[9px] md:text-[10px] font-bold opacity-40 uppercase mt-1 block">{item.sub}</span>
+        </div>
+      </button>
+    ))}
+
+    {/* ✅ AI 검색 링크 - 여기만 추가 */}
+    <Link
+      href="/admin/ai-search"
+      className="relative flex flex-col items-center gap-1.5 p-2 md:p-3 transition-all duration-300 snap-center min-w-[75px] md:min-w-[90px] hover:scale-105"
+    >
+      <div className="w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors bg-white text-slate-400 border border-slate-100 hover:bg-indigo-600 hover:text-white hover:border-indigo-600">
+        <Sparkles size={22}/>
+      </div>
+      <div className="text-center mt-1">
+        <span className="text-[11px] md:text-[13px] font-black block leading-none text-slate-400">
+          AI 검색
+        </span>
+        <span className="text-[9px] md:text-[10px] font-bold opacity-40 uppercase mt-1 block">AI SEARCH</span>
+      </div>
+    </Link>
+
+  </div>
+</header>
 
       {/* --- 메인 콘텐츠 영역 --- */}
       <main className="min-h-[600px]">

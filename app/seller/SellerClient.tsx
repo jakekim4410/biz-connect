@@ -1,5 +1,5 @@
 "use client";
-
+import { isCompanyMatch } from "@/lib/matchUtils";
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { 
@@ -17,7 +17,7 @@ import {
   Send, Download, Clock, FileText, Sparkles, ChevronRight, 
   Users, ShieldCheck, User as UserIcon, Save, AlertCircle, Building2,
   Trophy, ArrowRight, AlertTriangle, TrendingUp, Target,
-  XCircle, Calendar, Info, CheckCircle2
+  XCircle, Calendar, Info, CheckCircle2, Globe
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 
@@ -318,7 +318,47 @@ export default function SellerClient({
     rejected: 0,
   });
 
-  // 👇 [추가됨] 승인된 팀 멤버를 정렬 (마스터 최상단, 이후 가입순)
+  // AI 검색 state - BuyerClient와 동일한 패턴
+  const [aiSearchMode, setAiSearchMode] = useState(false);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiResults, setAiResults] = useState<any[]>([]);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiIsFallback, setAiIsFallback] = useState(false);
+  const [aiSearched, setAiSearched] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  const handleAiSearch = async () => {
+    if (!aiQuery.trim()) return;
+    setAiLoading(true);
+    setAiResults([]);
+    setAiError(null);
+    setAiIsFallback(false);
+    setAiSearched(true);
+    try {
+      const res = await fetch("/api/ai-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: aiQuery, searchRole: "BUYER" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error || "검색 중 오류가 발생했습니다.");
+        return;
+      }
+      setAiResults(data.results || []);
+      setAiIsFallback(data.isFallback || false);
+    } catch (e) {
+      setAiError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const aiAvgScore = aiResults.length > 0
+    ? Math.round(aiResults.reduce((s: number, r: any) => s + (r.matchScore ?? 0), 0) / aiResults.length)
+    : 0;
+
+  // 승인된 팀 멤버를 정렬 (마스터 최상단, 이후 가입순)
   const sortedApprovedMembers = useMemo(() => {
     if (!approvedMembers) return [];
     return [...approvedMembers].sort((a: any, b: any) => {
@@ -521,10 +561,11 @@ export default function SellerClient({
     <div className="min-h-screen relative overflow-hidden bg-[#f4f7fa] font-sans text-slate-900 pb-20 text-left">
       <div className="absolute top-[-10%] left-[-5%] w-[150%] md:w-[45%] h-[40%] bg-emerald-200/20 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className={`relative z-10 p-3 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-10 ${isPending ? 'opacity-70 pointer-events-none' : ''}`}>
+      {/* ✨ 변경: 전체 컨테이너에 max-w-[1440px] 적용 및 좌우 여백 확보하여 PC에서 과도하게 넓어지지 않도록 최적화 */}
+      <div className={`relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 space-y-6 md:space-y-10 ${isPending ? 'opacity-70 pointer-events-none' : ''}`}>
         
         {user.isMaster && pendingMembers.length > 0 && expandedSection !== 'team' && (
-          <div className="bg-indigo-600 text-white px-5 py-4 md:px-6 md:py-4 rounded-[24px] shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-4">
+          <div className="bg-indigo-600 text-white px-5 py-4 md:px-6 md:py-4 rounded-[24px] shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-4 w-full">
              <div className="flex items-center gap-3 w-full md:w-auto">
                 <div className="bg-white/20 p-2.5 rounded-full shrink-0"><Users size={18} className="text-white" /></div>
                 <span className="font-bold text-xs md:text-sm leading-snug">조직 합류 대기 팀원 <span className="text-indigo-200 font-black">{pendingMembers.length}명</span></span>
@@ -539,7 +580,7 @@ export default function SellerClient({
         )}
 
         {!isOnePagerCompleted && (
-          <div className="bg-white rounded-[30px] md:rounded-[40px] p-6 md:p-10 shadow-xl border border-blue-50 relative overflow-hidden animate-in fade-in slide-in-from-top-4 group transition-all duration-500 hover:shadow-2xl hover:border-blue-100">
+          <div className="bg-white rounded-[30px] md:rounded-[40px] p-6 md:p-10 shadow-xl border border-blue-50 relative overflow-hidden animate-in fade-in slide-in-from-top-4 group transition-all duration-500 hover:shadow-2xl hover:border-blue-100 w-full">
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full blur-3xl -z-10 transform translate-x-1/3 -translate-y-1/3 group-hover:scale-110 transition-transform duration-700"></div>
             <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-50/50 rounded-full blur-2xl -z-10 transform -translate-x-1/2 translate-y-1/2"></div>
 
@@ -584,8 +625,9 @@ export default function SellerClient({
           </div>
         )}
 
-        <header className="bg-white/90 backdrop-blur-2xl p-3 md:p-8 rounded-[24px] md:rounded-[45px] shadow-lg md:shadow-xl border border-white">
-          <div className="flex flex-row md:flex-wrap md:justify-around gap-2 md:gap-4 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* ✨ 변경: 상단 헤더 컨테이너가 하단 컨텐츠 폭과 동일하게 되도록 w-full 적용 및 아이콘 중앙정렬/간격확대 적용 */}
+        <header className="bg-white/90 backdrop-blur-2xl p-3 md:p-6 rounded-[24px] md:rounded-[40px] shadow-lg md:shadow-xl border border-white w-full">
+          <div className="flex flex-row md:flex-wrap md:justify-center gap-2 md:gap-12 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {navItems.map((item) => (
               <button 
                 key={item.id} 
@@ -608,12 +650,15 @@ export default function SellerClient({
             
             <div className="w-[1px] bg-slate-100 hidden md:block mx-1"></div>
 
-            <Link href="/seller/one-pager" className="flex flex-col items-center gap-1.5 p-2 md:p-3 group transition-all duration-300 snap-center min-w-[70px] md:min-w-0 hover:scale-105">
+<Link href="/seller/one-pager" className="flex flex-col items-center gap-1.5 p-2 md:p-3 group transition-all duration-300 snap-center min-w-[70px] md:min-w-0 hover:scale-105">
               <div className={`w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md ${!isOnePagerCompleted ? 'bg-rose-50 text-rose-500 animate-pulse border border-rose-200' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'} transition-colors`}>
                 <FileText size={22}/>
               </div>
               <div className="text-center mt-1">
-                  <span className={`text-[10px] md:text-sm font-black block leading-none ${!isOnePagerCompleted ? 'text-rose-500' : 'text-slate-500 group-hover:text-indigo-600'}`}>기업 소개 {!isOnePagerCompleted ? "(작성 필요)" : "(관리)"}</span>
+                  {/* ✨ 변경: 기업 소개와 괄호 내용 사이에 <br/> 추가 및 줄간격(leading-tight) 최적화 */}
+                  <span className={`text-[10px] md:text-sm font-black block leading-tight ${!isOnePagerCompleted ? 'text-rose-500' : 'text-slate-500 group-hover:text-indigo-600'}`}>
+                    기업 소개<br/>{!isOnePagerCompleted ? "(작성 필요)" : "(관리)"}
+                  </span>
                   <span className="text-[8px] md:text-[9px] font-bold opacity-40 uppercase mt-1 block">(ONE-PAGER)</span>
               </div>
             </Link>
@@ -624,7 +669,8 @@ export default function SellerClient({
 
           {/* 🚀 [프로필 수정 영역] */}
           {expandedSection === 'profile' && (
-            <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left">
+            // ✨ 변경: 프로필 입력 폼이 데스크탑에서 과도하게 늘어지지 않도록 max-w-5xl mx-auto 추가
+            <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left max-w-5xl mx-auto">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
                 <div className="flex items-center gap-4 w-full">
                   <div className="w-14 h-14 md:w-16 md:h-16 shrink-0 bg-slate-900 rounded-[18px] md:rounded-3xl flex items-center justify-center text-white shadow-xl">
@@ -777,7 +823,7 @@ export default function SellerClient({
 
           {/* 🚀 [팀 관리 영역] */}
           {expandedSection === 'team' && user.isMaster && (
-            <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left">
+            <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left w-full">
               <div className="flex flex-col mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
                 <h3 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2 md:gap-3 flex-wrap">
                   <ShieldCheck className="text-indigo-600" size={28}/>
@@ -876,7 +922,6 @@ export default function SellerClient({
                     </p>
                   </div>
 
-                  {/* 👇 [수정됨] 정렬된 sortedApprovedMembers를 매핑하여 렌더링 */}
                   {sortedApprovedMembers.map((m: any) => (
                     <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex items-center justify-between gap-3 border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-3 md:gap-4 min-w-0">
@@ -913,119 +958,345 @@ export default function SellerClient({
 
           {/* 🚀 [A] 매칭 탐색 (AVAILABLE) - 테이블 뷰 적용 */}
           {expandedSection === 'available' && (
-             <section className="animate-in fade-in slide-in-from-bottom-4 space-y-6 md:space-y-10 px-1 md:px-2">
-               
-               {!isOnePagerCompleted && availableSlots.length > 0 && (
-                 <div className="bg-rose-50 border-2 border-rose-100 rounded-[20px] md:rounded-[24px] p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 shadow-sm">
-                    <div className="bg-white p-3 rounded-full shrink-0 shadow-sm border border-rose-100 hidden md:block">
-                      <AlertTriangle className="text-rose-500" size={26} />
+            <section className="animate-in fade-in slide-in-from-bottom-4 space-y-6 md:space-y-10 px-1 md:px-2">
+              
+              {!isOnePagerCompleted && availableSlots.length > 0 && (
+                <div className="bg-rose-50 border-2 border-rose-100 rounded-[20px] md:rounded-[24px] p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 shadow-sm">
+                  <div className="bg-white p-3 rounded-full shrink-0 shadow-sm border border-rose-100 hidden md:block">
+                    <AlertTriangle className="text-rose-500" size={26} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm md:text-base font-black text-rose-900 flex items-center gap-2">
+                      <AlertTriangle className="text-rose-500 md:hidden shrink-0" size={18} />
+                      잠깐! 미팅을 신청하기 전에 원페이저를 꼭 작성해주세요.
+                    </p>
+                    <p className="text-xs md:text-sm font-bold text-rose-700 mt-1.5 leading-relaxed break-keep">
+                      바이어 측에 제공될 기업 정보가 없어, <b>신청하더라도 검토 없이 거절될 확률이 매우 높습니다.</b> 소중한 매칭 기회를 놓치지 마세요.
+                    </p>
+                  </div>
+                  <Link href="/seller/one-pager" className="w-full md:w-auto whitespace-nowrap px-6 py-3.5 bg-rose-500 text-white text-sm font-black rounded-[16px] hover:bg-rose-600 transition-colors shadow-md text-center">
+                    지금 작성하기
+                  </Link>
+                </div>
+              )}
+
+              <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
+                매칭 탐색 <span className="text-sm text-slate-400 font-bold uppercase ml-2 tracking-widest">(AVAILABLE)</span>
+              </h2>
+
+              {/* 검색 모드 토글 */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setAiSearchMode(false)}
+                  className={`px-4 py-2 rounded-[12px] text-xs font-black transition-all ${!aiSearchMode ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+                >
+                  🔍 전체 목록 보기
+                </button>
+                <button
+                  onClick={() => setAiSearchMode(true)}
+                  className={`px-4 py-2 rounded-[12px] text-xs font-black transition-all flex items-center gap-1.5 ${aiSearchMode ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+                >
+                  <Sparkles size={13}/> AI 스마트 검색
+                </button>
+              </div>
+
+              {/* AI 검색창 */}
+              {aiSearchMode && (
+                <div className="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[30px] shadow-sm border border-emerald-100 flex flex-col gap-4">
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <Sparkles className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-400" size={18}/>
+                      <input
+                        value={aiQuery}
+                        onChange={(e) => setAiQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAiSearch()}
+                        placeholder="예: SaaS 솔루션에 투자하는 VC, 헬스케어 분야 바이어..."
+                        className="w-full pl-12 pr-5 py-4 bg-emerald-50 border-transparent focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 rounded-[18px] text-sm font-bold outline-none transition-all"
+                      />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm md:text-base font-black text-rose-900 flex items-center gap-2">
-                        <AlertTriangle className="text-rose-500 md:hidden shrink-0" size={18} />
-                        잠깐! 미팅을 신청하기 전에 원페이저를 꼭 작성해주세요.
-                      </p>
-                      <p className="text-xs md:text-sm font-bold text-rose-700 mt-1.5 leading-relaxed break-keep">
-                        바이어 측에 제공될 기업 정보가 없어, <b>신청하더라도 검토 없이 거절될 확률이 매우 높습니다.</b> 소중한 매칭 기회를 놓치지 마세요.
-                      </p>
+                    <button
+                      onClick={handleAiSearch}
+                      disabled={aiLoading || !aiQuery.trim()}
+                      className="px-6 py-4 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 shadow-lg shadow-emerald-200"
+                    >
+                      {aiLoading ? <Clock className="animate-spin" size={16}/> : <Sparkles size={16}/>}
+                      <span className="hidden md:inline">{aiLoading ? "분석 중..." : "AI 검색"}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-emerald-500 font-bold pl-1">💡 원하는 바이어/VC 조건을 자유롭게 입력하세요. AI가 DB + 웹 정보를 종합 분석합니다.</p>
+                </div>
+              )}
+
+              {/* AI 로딩 */}
+              {aiSearchMode && aiLoading && (
+                <div className="bg-white rounded-[24px] p-10 flex flex-col items-center gap-5 border border-emerald-100 shadow-sm">
+                  <div className="relative">
+                    <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center">
+                      <Sparkles size={28} className="text-emerald-500 animate-pulse" />
                     </div>
-                    <Link href="/seller/one-pager" className="w-full md:w-auto whitespace-nowrap px-6 py-3.5 bg-rose-500 text-white text-sm font-black rounded-[16px] hover:bg-rose-600 transition-colors shadow-md text-center">
-                      지금 작성하기
-                    </Link>
-                 </div>
-               )}
+                    <div className="absolute inset-0 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-black text-slate-700">AI가 최적의 바이어/VC를 분석 중입니다...</p>
+                    <p className="text-xs text-slate-400 font-bold">DB 데이터 + 웹 검색을 종합하고 있어요</p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap justify-center">
+                    {["DB 분석", "웹 검색", "매칭 스코어 계산"].map((step, i) => (
+                      <span key={step} className="px-3 py-1.5 bg-emerald-50 text-emerald-400 text-[10px] font-black rounded-full animate-pulse" style={{ animationDelay: `${i * 0.3}s` }}>
+                        {step}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-               <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
-                 매칭 탐색 <span className="text-sm text-slate-400 font-bold uppercase ml-2 tracking-widest">(AVAILABLE)</span>
-               </h2>
+              {/* AI 에러 */}
+              {aiSearchMode && !aiLoading && aiError && (
+                <div className="bg-rose-50 border border-rose-100 rounded-[24px] p-6 flex items-start gap-4">
+                  <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
+                    <AlertCircle size={20} className="text-rose-500" />
+                  </div>
+                  <div>
+                    <p className="font-black text-rose-700 text-sm">검색 오류</p>
+                    <p className="text-xs text-rose-500 mt-1 font-bold">{aiError}</p>
+                    <button onClick={handleAiSearch} className="mt-3 px-4 py-2 bg-rose-500 text-white text-xs font-black rounded-xl hover:bg-rose-600 transition-colors">
+                      다시 시도
+                    </button>
+                  </div>
+                </div>
+              )}
 
-               <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
-                 <div className="overflow-x-auto custom-scrollbar">
-                   <table className="w-full text-left border-collapse min-w-[850px]">
-                     <thead>
-                       <tr className="bg-slate-50 border-b border-slate-100">
-                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">바이어 (Buyer)</th>
-                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">선호 파트너 (Interests)</th>
-                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">희망 일시 (Date & Time)</th>
-                         {/* 👇 [추가됨] 장소 헤더 추가 */}
-                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">장소 (Location)</th>
-                         <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">상태 / 액션</th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-100">
-                       {availableSlots.map((slot: any) => {
-                         const colleagueMeeting = slot.meetings?.find((m: any) => 
-                           m.seller?.companyName === user.companyName && m.sellerId !== user.id
-                         );
+              {/* AI 검색 결과 */}
+              {aiSearchMode && !aiLoading && aiSearched && !aiError && (
+                <div className="space-y-4">
+                  {/* 결과 헤더 */}
+                  <div className={`rounded-[20px] p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between border ${
+                    aiIsFallback ? "bg-amber-50 border-amber-100" :
+                    aiResults.length === 0 ? "bg-slate-50 border-slate-200" :
+                    "bg-emerald-50 border-emerald-100"
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <Sparkles size={16} className={aiIsFallback ? "text-amber-500" : aiResults.length === 0 ? "text-slate-400" : "text-emerald-500"} />
+                      <div>
+                        <span className={`text-sm font-black ${aiIsFallback ? "text-amber-700" : aiResults.length === 0 ? "text-slate-600" : "text-emerald-700"}`}>
+                          {aiResults.length === 0
+                            ? `"${aiQuery}" 검색 결과 없음`
+                            : aiIsFallback
+                              ? `정확한 매칭 어려움 — 유사 바이어 ${aiResults.length}개 표시 중`
+                              : `AI 추천 바이어/VC ${aiResults.length}개`}
+                        </span>
+                        {aiIsFallback && (
+                          <p className="text-[11px] text-amber-600 font-bold mt-0.5">
+                            등록 데이터 부족으로 정확도가 낮습니다.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {aiResults.length > 0 && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">평균 매칭도</span>
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-black ${
+                          aiAvgScore >= 70 ? "bg-emerald-100 text-emerald-700" :
+                          aiAvgScore >= 50 ? "bg-amber-100 text-amber-700" :
+                          "bg-slate-100 text-slate-600"
+                        }`}>
+                          {aiAvgScore}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-                         return (
-                           <tr key={slot.id} className="hover:bg-blue-50/50 transition-colors group">
+                  {/* 결과 없음 */}
+                  {aiResults.length === 0 && (
+                    <div className="bg-white rounded-[24px] border border-slate-100 p-10 flex flex-col items-center gap-5 text-center shadow-sm">
+                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
+                        <Search size={28} className="text-slate-300" />
+                      </div>
+                      <div className="space-y-2 max-w-md">
+                        <p className="font-black text-slate-700 text-base">검색 조건에 맞는 바이어를 찾지 못했습니다</p>
+                        <p className="text-sm text-slate-500 font-bold leading-relaxed">
+                          검색 조건을 바꾸거나 전체 목록에서 직접 탐색해보세요.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setAiSearchMode(false); setAiSearched(false); }}
+                        className="px-6 py-3 bg-slate-900 text-white text-xs font-black rounded-[14px] hover:bg-emerald-600 transition-colors"
+                      >
+                        전체 목록으로 전환
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 결과 카드 */}
+                  {aiResults.length > 0 && (
+                    <div className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm">
+                      <div className="divide-y divide-slate-100">
+                        {aiResults.map((result: any, idx: number) => {
+const matchedSlot = availableSlots.find((slot: any) =>
+  isCompanyMatch(slot.buyer?.companyName || "", result.companyName || "")
+);
+                          const score = result.matchScore ?? 0;
+                          const scoreColor =
+                            score >= 80 ? { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700", text: "높음" } :
+                            score >= 60 ? { bar: "bg-amber-400", badge: "bg-amber-100 text-amber-700", text: "보통" } :
+                                         { bar: "bg-slate-300", badge: "bg-slate-100 text-slate-600", text: "낮음" };
+                          return (
+                            <div key={idx} className="p-5 md:p-6 transition-colors group">
+                              <div className="flex items-start gap-4">
+                                <div className="w-9 h-9 rounded-[10px] bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
+                                  {idx + 1}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-black text-slate-800 text-base leading-none">{result.companyName}</h4>
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${scoreColor.badge}`}>
+                                      {scoreColor.text} ({score}점)
+                                    </span>
+                                    {!matchedSlot && <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[9px] font-black rounded-md">슬롯 미개설</span>}
+                                    {aiIsFallback && <span className="px-2 py-0.5 bg-amber-100 text-amber-500 text-[9px] font-black rounded-md">참고용</span>}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all duration-700 ${scoreColor.bar}`} style={{ width: `${score}%` }} />
+                                    </div>
+                                    <span className="text-[10px] font-black text-slate-400 shrink-0 w-8 text-right">{score}%</span>
+                                  </div>
+                                  {result.basicInfo && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {result.basicInfo.industry && result.basicInfo.industry !== "미지정" && (
+                                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg">{result.basicInfo.industry}</span>
+                                      )}
+                                      {result.basicInfo.stage && result.basicInfo.stage !== "미정" && (
+                                        <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-black rounded-lg">{result.basicInfo.stage}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                  <p className="text-xs text-slate-600 font-bold leading-relaxed flex items-start gap-1.5">
+                                    <Sparkles size={12} className="shrink-0 mt-0.5 text-emerald-400" />
+                                    {result.matchReason}
+                                  </p>
+                                  {result.webInfo && result.webInfo !== "등록된 정보가 부족하여 웹 검색 결과를 활용하지 못했습니다. 기업 원페이저를 업데이트하면 더 정확한 매칭이 가능합니다." && (
+                                    <p className="text-[11px] text-slate-500 font-medium bg-slate-50 px-3 py-2.5 rounded-[12px] flex items-start gap-1.5 leading-relaxed">
+                                      <Globe size={11} className="shrink-0 mt-0.5 text-slate-400" />
+                                      {result.webInfo}
+                                    </p>
+                                  )}
+                                  {matchedSlot && (
+                                    <button
+                                      onClick={() => setApplyingSlot(matchedSlot)}
+                                      className="mt-1 px-4 py-2 bg-emerald-600 text-white text-xs font-black rounded-[12px] hover:bg-emerald-700 transition-colors flex items-center gap-1.5 w-fit shadow-md shadow-emerald-200/50"
+                                    >
+                                      <Send size={12}/> 미팅 신청하기
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                        <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5">
+                          <Info size={11} /> AI 추천 결과입니다. 전체 목록에서 더 많은 바이어를 확인하세요.
+                        </p>
+                        <button
+                          onClick={() => { setAiSearchMode(false); setAiSearched(false); }}
+                          className="text-[10px] font-black text-emerald-500 hover:text-emerald-700 transition-colors flex items-center gap-1"
+                        >
+                          전체 목록 보기 <ChevronRight size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 기존 availableSlots 테이블 (AI 검색 모드가 아닐 때만 표시) */}
+              {!aiSearchMode && (
+                <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[850px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">바이어 (Buyer)</th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">선호 파트너 (Interests)</th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">희망 일시 (Date & Time)</th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">장소 (Location)</th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">상태 / 액션</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {availableSlots.map((slot: any) => {
+                          const colleagueMeeting = slot.meetings?.find((m: any) => 
+                            m.seller?.companyName === user.companyName && m.sellerId !== user.id
+                          );
+                          return (
+                            <tr key={slot.id} className="hover:bg-blue-50/50 transition-colors group">
                               <td className="px-6 py-5">
-                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-slate-100 rounded-[12px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                      <Building2 size={20}/>
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-[12px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                    <Building2 size={20}/>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-black text-sm text-slate-800 truncate">{slot.buyer?.companyName}</h4>
+                                      <span className="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-md font-bold">{slot.buyer?.userType}</span>
                                     </div>
-                                    <div className="min-w-0">
-                                       <div className="flex items-center gap-2">
-                                         <h4 className="font-black text-sm text-slate-800 truncate">{slot.buyer?.companyName}</h4>
-                                         <span className="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-md font-bold">{slot.buyer?.userType}</span>
-                                       </div>
-                                       <p className="text-[10px] text-slate-400 font-bold mt-1.5 truncate">
-                                          <UserIcon size={10} className="inline mr-1" />
-                                          {slot.buyer?.name} {slot.buyer?.jobTitle && `(${slot.buyer.jobTitle})`}
-                                       </p>
-                                    </div>
-                                 </div>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-1.5 truncate">
+                                      <UserIcon size={10} className="inline mr-1" />
+                                      {slot.buyer?.name} {slot.buyer?.jobTitle && `(${slot.buyer.jobTitle})`}
+                                    </p>
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-6 py-5 max-w-[280px]">
-                                 <p className="text-xs text-slate-500 font-medium truncate italic">
-                                   "{slot.buyer?.preferredPartners || "전분야 협업 가능"}"
-                                 </p>
+                                <p className="text-xs text-slate-500 font-medium truncate italic">
+                                  "{slot.buyer?.preferredPartners || "전분야 협업 가능"}"
+                                </p>
                               </td>
                               <td className="px-6 py-5">
-                                 <p className="text-xs font-black text-slate-700">{formatDateWithDay(slot.startTime)}</p>
-                                 <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(slot.startTime)}</p>
+                                <p className="text-xs font-black text-slate-700">{formatDateWithDay(slot.startTime)}</p>
+                                <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(slot.startTime)}</p>
                               </td>
-                              {/* 👇 [추가됨] 장소 데이터 셀 추가 */}
                               <td className="px-6 py-5">
-                                 <div className="flex items-center gap-1.5">
-                                   <MapPin size={14} className="text-rose-400 shrink-0"/>
-                                   <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
-                                     {slot.location || "미지정 (운영팀 안내 예정)"}
-                                   </span>
-                                 </div>
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin size={14} className="text-rose-400 shrink-0"/>
+                                  <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
+                                    {slot.location || "미지정 (운영팀 안내 예정)"}
+                                  </span>
+                                </div>
                               </td>
                               <td className="px-6 py-5 text-right">
-                                 <div className="flex flex-col items-end gap-2.5">
-                                   {colleagueMeeting && (
-                                      <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
-                                        <Users size={12}/> 팀원 중 중복 신청
-                                      </span>
-                                   )}
-                                   <button 
-                                     onClick={() => setApplyingSlot(slot)} 
-                                     className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black hover:bg-blue-600 transition-colors shadow-sm flex items-center gap-1.5"
-                                   >
-                                     <Send size={12}/> 미팅 신청
-                                   </button>
-                                 </div>
+                                <div className="flex flex-col items-end gap-2.5">
+                                  {colleagueMeeting && (
+                                    <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
+                                      <Users size={12}/> 팀원 중 중복 신청
+                                    </span>
+                                  )}
+                                  <button 
+                                    onClick={() => setApplyingSlot(slot)} 
+                                    className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black hover:bg-blue-600 transition-colors shadow-sm flex items-center gap-1.5"
+                                  >
+                                    <Send size={12}/> 미팅 신청
+                                  </button>
+                                </div>
                               </td>
-                           </tr>
-                         );
-                       })}
-                       {availableSlots.length === 0 && (
-                         <tr>
-                           {/* 👇 [수정됨] colSpan을 4에서 5로 변경 */}
-                           <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-bold text-sm bg-slate-50/50">
-                             현재 신청 가능한 미팅 슬롯이 없습니다.
-                           </td>
-                         </tr>
-                       )}
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
-             </section>
+                            </tr>
+                          );
+                        })}
+                        {availableSlots.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-bold text-sm bg-slate-50/50">
+                              현재 신청 가능한 미팅 슬롯이 없습니다.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {/* 🚀 [B] 신청 현황 (PENDING) - 모던 Card UI 적용 */}
@@ -1036,15 +1307,16 @@ export default function SellerClient({
                  <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(PENDING STATUS)</p>
                </div>
                
+               {/* ✨ 변경: Empty State 박스에 max-w-4xl 추가하여 데스크탑에서 너무 넓게 보이지 않도록 함 */}
                {pendingMeetings.length === 0 ? (
-                 <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center">
+                 <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center max-w-4xl mx-auto">
                    <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
                      <Clock size={32}/>
                    </div>
                    <p className="text-slate-500 font-bold text-sm md:text-base">현재 대기 중인 신청 내역이 없습니다.</p>
                  </div>
                ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                    {pendingMeetings.map((m: any) => (
                      <div key={m.id} className="bg-white rounded-[24px] border border-blue-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
                        
@@ -1109,15 +1381,16 @@ export default function SellerClient({
                 </button>
               </div>
 
+              {/* ✨ 변경: Empty State 박스에 max-w-4xl 추가 */}
               {displayConfirmed.length === 0 ? (
-                <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center">
+                <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center max-w-4xl mx-auto">
                   <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
                     <Handshake size={32}/>
                   </div>
                   <p className="text-slate-500 font-bold text-sm md:text-base">확정된 미팅 일정이 없습니다.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {displayConfirmed.map((m: any) => (
                     <div key={m.id} className="bg-white rounded-[24px] border-2 border-emerald-100 shadow-lg overflow-hidden flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all relative">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-[100px] -z-10"></div>
@@ -1176,15 +1449,16 @@ export default function SellerClient({
                 <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(REJECTED MEETINGS)</p>
               </div>
 
+              {/* ✨ 변경: Empty State 박스에 max-w-4xl 추가 */}
               {rejectedMeetings.length === 0 ? (
-                <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center">
+                <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center max-w-4xl mx-auto">
                   <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
                     <XCircle size={32}/>
                   </div>
                   <p className="text-slate-500 font-bold text-sm md:text-base">거절된 미팅 내역이 없습니다.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {rejectedMeetings.map((m: any) => (
                     <div key={m.id} className="bg-white rounded-[24px] border border-rose-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
                       

@@ -21,11 +21,10 @@ export async function checkExistingCompanyAction(companyName: string) {
         name: true, 
         role: true, 
         onePager: true, 
-        businessNumber: true, // 👈 추가됨: 화면에 표시하기 위해 사업자번호도 함께 가져옴
+        businessNumber: true, 
       },
     });
 
-    // 중복 회사명 제거 (가장 먼저 가입한 사람 기준)
     const uniqueCompanies = Array.from(new Map(existingCompanies.map(item => [item.companyName, item])).values());
     return uniqueCompanies;
   } catch (e) {
@@ -34,7 +33,7 @@ export async function checkExistingCompanyAction(companyName: string) {
   }
 }
 
-// 1-2. 사업자등록번호로 동일 회사 존재 여부 확인
+// 2. 사업자등록번호로 동일 회사 존재 여부 확인
 export async function checkExistingBusinessNumberAction(businessNumber: string) {
   if (!businessNumber || businessNumber.length < 10) return null;
 
@@ -55,7 +54,7 @@ export async function checkExistingBusinessNumberAction(businessNumber: string) 
   }
 }
 
-// [추가됨] 1-3. 이메일 중복 존재 여부 확인
+// 3. 이메일 중복 존재 여부 확인
 export async function checkExistingEmailAction(email: string) {
   if (!email) return false;
 
@@ -64,14 +63,14 @@ export async function checkExistingEmailAction(email: string) {
       where: { email: email },
       select: { id: true }
     });
-    return !!existingUser; // 존재하면 true, 없으면 false 반환
+    return !!existingUser; 
   } catch (e) {
     console.error("이메일 중복 확인 에러:", e);
     return false;
   }
 }
 
-// 2. 회원가입 처리
+// 4. 회원가입 처리
 export async function registerUserAction(formData: FormData) {
   const email = formData.get("email") as string;
   const phone = formData.get("phone") as string;
@@ -79,7 +78,7 @@ export async function registerUserAction(formData: FormData) {
   const name = formData.get("name") as string; 
   let companyName = formData.get("companyName") as string; 
   const jobTitle = formData.get("jobTitle") as string; 
-  const role = formData.get("role") as string; // "BUYER" 또는 "SELLER"
+  const role = formData.get("role") as string; 
   const userType = formData.get("userType") as string;
   const userTypeDetail = formData.get("userTypeDetail") as string;
   const preferredPartners = formData.get("preferredPartners") as string;
@@ -89,7 +88,6 @@ export async function registerUserAction(formData: FormData) {
     return { error: "필수 정보를 모두 입력해주세요." };
   }
 
-  // SELLER는 사업자등록번호 필수 검증
   if (role === "SELLER" && !businessNumber) {
     return { error: "스타트업(SELLER)은 사업자등록번호를 반드시 입력해야 합니다." };
   }
@@ -97,7 +95,6 @@ export async function registerUserAction(formData: FormData) {
   try {
     let existingCompanyRecord = null;
 
-    // 1회사 1역할 및 사업자번호 기반 그룹핑
     if (role === "SELLER" && businessNumber) {
       existingCompanyRecord = await db.user.findFirst({
         where: { businessNumber: businessNumber },
@@ -134,7 +131,6 @@ export async function registerUserAction(formData: FormData) {
     let isMaster = false;
     let approvalStatus = "PENDING"; 
 
-    // 바이어 가입 시 어드민 승인 필수 로직 명확화
     if (role === "SELLER") {
       if (isFirstUser) {
         isMaster = true;
@@ -148,7 +144,6 @@ export async function registerUserAction(formData: FormData) {
       approvalStatus = "PENDING"; 
     }
 
-    // 유저 생성
     const newUser = await db.user.create({
       data: { 
         email, 
@@ -167,7 +162,6 @@ export async function registerUserAction(formData: FormData) {
       }
     });
 
-    // SELLER인 경우 원페이저 생성 로직
     if (role === "SELLER") {
       if (masterUser && masterUser.onePager) {
         await db.onePager.create({
@@ -209,7 +203,6 @@ export async function registerUserAction(formData: FormData) {
 
   } catch (e: any) {
     console.error("DB 저장 에러:", e);
-    // Prisma 고유 에러코드 P2002는 Unique 제약조건(이메일 중복 등) 위반입니다.
     if (e.code === 'P2002') {
       return { error: "이미 가입된 이메일입니다." };
     }

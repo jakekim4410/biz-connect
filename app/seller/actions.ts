@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "../../lib/db";
+import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -37,9 +37,9 @@ export async function handleMemberStatus(memberId: number, status: "APPROVED" | 
 
   const dataToUpdate: any = { approvalStatus: status };
   if (status === "REJECTED") {
-    dataToUpdate.rejectionReason = reason || null; // 거절 사유 저장
+    dataToUpdate.rejectionReason = reason || null; 
   } else if (status === "APPROVED") {
-    dataToUpdate.rejectionReason = null; // 승인 시 거절 사유 초기화
+    dataToUpdate.rejectionReason = null; 
   }
 
   await db.user.update({
@@ -47,7 +47,6 @@ export async function handleMemberStatus(memberId: number, status: "APPROVED" | 
     data: dataToUpdate
   });
 
-  // 승인 시 마스터의 비즈니스 정보를 멤버에게 동기화
   if (status === "APPROVED") {
     const masterOP = await db.onePager.findUnique({ where: { userId: masterId } });
     if (masterOP) {
@@ -92,7 +91,7 @@ export async function transferMasterRole(newMasterId: number) {
   }
 }
 
-// 4. 거절된 유저 정보 수정 및 재신청 (👇 사업자등록번호 업데이트 추가)
+// 4. 거절된 유저 정보 수정 및 재신청
 export async function reRequestApprovalAction(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "로그인이 필요합니다." };
@@ -103,7 +102,7 @@ export async function reRequestApprovalAction(formData: FormData) {
   const jobTitle = formData.get("jobTitle") as string;
   const phone = formData.get("phone") as string;
   const companyName = formData.get("companyName") as string;
-  const businessNumber = formData.get("businessNumber") as string; // 👈 추가됨
+  const businessNumber = formData.get("businessNumber") as string; 
   const userType = formData.get("userType") as string;
   const userTypeDetail = formData.get("userTypeDetail") as string;
   const preferredPartners = formData.get("preferredPartners") as string;
@@ -120,7 +119,7 @@ export async function reRequestApprovalAction(formData: FormData) {
         jobTitle,
         phone,
         companyName,
-        businessNumber: businessNumber || null, // 👈 추가됨
+        businessNumber: businessNumber || null, 
         userType,
         userTypeDetail,
         preferredPartners,
@@ -212,7 +211,7 @@ export async function saveOnePager(formData: FormData) {
   }
 }
 
-// 👇 [추가됨] 6. 유사 회사명 존재 여부 확인 (재신청 폼에서 사용)
+// 6. 유사 회사명 존재 여부 확인 (재신청 폼에서 사용)
 export async function checkExistingCompanyAction(companyName: string) {
   if (!companyName || companyName.length < 2) return[];
 
@@ -233,7 +232,6 @@ export async function checkExistingCompanyAction(companyName: string) {
       },
     });
 
-    // 중복 회사명 제거
     const uniqueCompanies = Array.from(new Map(existingCompanies.map(item => [item.companyName, item])).values());
     return uniqueCompanies;
   } catch (e) {
@@ -242,7 +240,7 @@ export async function checkExistingCompanyAction(companyName: string) {
   }
 }
 
-// 👇 [추가됨] 7. 사업자등록번호로 동일 회사 존재 여부 확인 (재신청 폼에서 사용)
+// 7. 사업자등록번호로 동일 회사 존재 여부 확인 (재신청 폼에서 사용)
 export async function checkExistingBusinessNumberAction(businessNumber: string) {
   if (!businessNumber || businessNumber.length < 10) return null;
 

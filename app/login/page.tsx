@@ -3,8 +3,10 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -18,37 +20,28 @@ export default function LoginPage() {
 
     try {
       const res = await signIn("credentials", { email, password, redirect: false });
-      
+
       if (res?.error) {
-        // 백엔드(NextAuth)에서 던져주는 에러 메시지에 따라 분기 처리
-        if (res.error === "UserNotFound") {
-          setError("메일주소가 다르거나 가입하지 않은 메일주소입니다.");
-        } else if (res.error === "IncorrectPassword") {
-          setError("비밀번호가 틀립니다.");
-        } else if (res.error === "PendingApproval") {
-          // 👇 추가된 부분: 승인 대기 중인 계정 처리
-          setError("관리자 승인 대기 중입니다. 승인 완료 후 로그인 가능합니다."); 
-        } else if (res.error === "RejectedAccount") {
-          // 👇 추가된 부분: 승인 거절된 계정 처리
-          setError("가입이 거절된 계정입니다. 관리자에게 문의해주세요."); 
-        } else {
-          setError("로그인 중 오류가 발생했습니다.");
-        }
+        if (res.error === "UserNotFound") setError(t.login.errorUserNotFound);
+        else if (res.error === "IncorrectPassword") setError(t.login.errorIncorrectPassword);
+        else if (res.error === "PendingApproval") setError(t.login.errorPending);
+        else if (res.error === "RejectedAccount") setError(t.login.errorRejected);
+        else setError(t.login.errorGeneral);
         setIsLoading(false);
       } else {
         const sessionRes = await fetch("/api/auth/session");
         const sessionData = await sessionRes.json();
         const role = sessionData?.user?.role;
-        
+
         if (role === "ADMIN") router.push("/admin");
         else if (role === "BUYER") router.push("/buyer");
         else if (role === "SELLER") router.push("/seller");
         else router.push("/");
-        
+
         router.refresh();
       }
     } catch (err) {
-      setError("로그인 처리 중 문제가 발생했습니다.");
+      setError(t.login.errorGeneral);
       setIsLoading(false);
     }
   };
@@ -64,50 +57,61 @@ export default function LoginPage() {
               <span className="text-[#111827]">Biz</span>
               <span className="text-[#2563eb]">Connect</span>
             </h1>
-            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Sign In</p>
+            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">
+              {t.login.title}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <p className="text-[11px] font-black text-slate-400 ml-2 uppercase">Email</p>
+              <p className="text-[11px] font-black text-slate-400 ml-2 uppercase">
+                {t.common.email}
+              </p>
               <input
                 type="email" required value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full p-4 bg-slate-50 border-none rounded-2xl shadow-inner focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-                placeholder="example@email.com"
+                placeholder={t.login.emailPlaceholder}
               />
             </div>
             <div className="space-y-2">
-              <p className="text-[11px] font-black text-slate-400 ml-2 uppercase">Password</p>
+              <p className="text-[11px] font-black text-slate-400 ml-2 uppercase">
+                {t.common.password}
+              </p>
               <input
                 type="password" required value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full p-4 bg-slate-50 border-none rounded-2xl shadow-inner focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-                placeholder="••••••••"
+                placeholder={t.login.passwordPlaceholder}
               />
             </div>
 
-            {error && <p className="text-rose-500 text-xs font-bold text-center animate-bounce">{error}</p>}
+            {error && (
+              <p className="text-rose-500 text-xs font-bold text-center animate-bounce">
+                {error}
+              </p>
+            )}
 
             <button
               type="submit" disabled={isLoading}
               className={`w-full py-4 rounded-2xl font-black text-white transition-all duration-300 shadow-xl flex items-center justify-center gap-3
                 ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}`}
             >
-              {/* 로딩 중일 때 스피너 SVG 렌더링 */}
               {isLoading && (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               )}
-              <span>{isLoading ? "로그인 중..." : "로그인"}</span>
+              <span>{isLoading ? t.login.loadingButton : t.login.submitButton}</span>
             </button>
           </form>
 
           <div className="mt-8 text-center">
-            <p className="text-xs text-slate-400 font-bold">아직 계정이 없으신가요?</p>
-            <Link href="/register" className="text-blue-600 text-xs font-black mt-2 inline-block hover:underline underline-offset-4">회원가입 하기</Link>
+            <p className="text-xs text-slate-400 font-bold">{t.login.noAccount}</p>
+            <Link href="/register" className="text-blue-600 text-xs font-black mt-2 inline-block hover:underline underline-offset-4">
+              {t.login.registerLink}
+            </Link>
           </div>
         </div>
       </div>
