@@ -1,5 +1,4 @@
 "use client";
-
 import { signOut } from "next-auth/react";
 import { useI18n } from "@/lib/i18n";
 import { LogOut } from "lucide-react";
@@ -10,10 +9,10 @@ export default function LogoutButton() {
   return (
     <button
       onClick={() => signOut({ callbackUrl: "/" })}
-      className="flex items-center gap-2 text-[12px] font-black text-slate-500 hover:text-rose-600 transition-all group px-2 py-1.5 rounded-lg hover:bg-rose-50"
+      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
     >
-      <LogOut size={15} className="group-hover:translate-x-0.5 transition-transform" />
-      <span>{t.common.logout}</span>
+      <LogOut size={16} />
+      <span className="text-[12px] font-bold whitespace-nowrap">{t.common.logout}</span>
     </button>
   );
 }
