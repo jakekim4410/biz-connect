@@ -13,36 +13,41 @@ model User {
   email             String   @unique
   password          String
   name              String
-  role              String   // "BUYER", "SELLER", "ADMIN" (전체 관리자)
+  role              String
   companyName       String
-  businessNumber    String?  // [추가됨] 사업자등록번호 (SELLER는 필수, BUYER는 선택)
-  jobTitle          String   
-  phone             String  
-  rejectionReason String? 
-  
-  // [수정] 마스터/멤버 구분 및 승인 시스템
-  isMaster          Boolean  @default(false)      // 마스터 여부 (최초 가입자 등)
-  approvalStatus    String   @default("APPROVED") // "PENDING", "APPROVED", "REJECTED"
-
-  userType          String?  
-  userTypeDetail    String?  
-  preferredPartners String?  
-
+  companyNameEn     String   @default("")
+  ceoNameKo         String   @default("")
+  ceoNameEn         String   @default("")
+  nameEn            String   @default("")
+  businessNumber    String?
+  jobTitle          String
+  jobTitleEn   String   @default("")
+  phone             String
+  privacyConsent    Boolean  @default(false)
+  rejectionReason   String?
+  isMaster          Boolean  @default(false)
+  approvalStatus    String   @default("APPROVED")
+  userType          String?
+  userTypeDetail    String?
+  preferredPartners String?
   timeSlots         TimeSlot[]
   meetingsAsBuyer   Meeting[] @relation("BuyerMeetings")
   meetingsAsSeller  Meeting[] @relation("SellerMeetings")
-  
   onePager          OnePager?
-
   createdAt         DateTime @default(now())
+  industrySector    String?
+  primaryTech       String?
+  investmentStage   String?
+  yearFounded       String?
+  linkedinUrl       String?
 }
 
 model TimeSlot {
   id          Int      @id @default(autoincrement())
   startTime   DateTime
   endTime     DateTime
-  description String?  
-  location    String?  
+  description String?
+  location    String?
   status      String   @default("OPEN")
   buyer       User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId     Int
@@ -52,16 +57,16 @@ model TimeSlot {
 model Meeting {
   id                    Int      @id @default(autoincrement())
   status                String   @default("PENDING")
-  proposal              String?  
-  rejectionReason       String?  
-  location              String?  
-  pendingLocation       String?  
-  locationChangeStatus  String?  
+  proposal              String?
+  rejectionReason       String?
+  location              String?
+  pendingLocation       String?
+  locationChangeStatus  String?
   timeSlot              TimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
   timeSlotId            Int
   buyer                 User     @relation("BuyerMeetings", fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId               Int
-  seller                User     @relation("SellerMeetings", fields:[sellerId], references: [id], onDelete: Cascade)
+  seller                User     @relation("SellerMeetings", fields: [sellerId], references: [id], onDelete: Cascade)
   sellerId              Int
   createdAt             DateTime @default(now())
 }
@@ -70,21 +75,20 @@ model OnePager {
   id              Int      @id @default(autoincrement())
   userId          Int      @unique
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  companyNameKr   String   @default("") 
-  companyNameEn   String   @default("") 
-  ceoName         String   @default("") 
-  picName         String   @default("") 
-  picTitle        String   @default("") 
-  
+  companyNameKr   String   @default("")
+  companyNameEn   String   @default("")
+  ceoName         String   @default("")
+  ceoNameEn       String   @default("")  // ⭐ 추가: 대표자 영문명
+  picName         String   @default("")
+  picNameEn       String   @default("")  // ⭐ 추가: 담당자 영문명
+  picTitle        String   @default("")
+  picTitleEn   String   @default("")
   productType     String   @default("")
   solutionSummary String   @db.Text @default("")
-  
   problem         String   @db.Text @default("")
   solution        String   @db.Text @default("")
   traction        String   @db.Text @default("")
   bizModel        String   @db.Text @default("")
-
   primaryTech     String   @default("")
   industrySector  String   @default("")
   yearFounded     String   @default("")
@@ -92,6 +96,6 @@ model OnePager {
   monthlyRevenue  String   @default("")
   pitchDeckUrl    String   @default("")
   contactEmail    String   @default("")
-
+  linkedinUrl     String   @default("")
   updatedAt       DateTime @updatedAt
 }

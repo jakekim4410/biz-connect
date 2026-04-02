@@ -89,7 +89,7 @@ export default function MeetingConfirmedEmail({
           </Text>
           <Hr style={{ borderColor: "#e2e8f0", margin: "30px 0 20px 0" }} />
           <Text style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
-            © 2024 BizConnect. All rights reserved.
+            © 2026 BizConnect. All rights reserved.
           </Text>
         </Container>
       </Body>

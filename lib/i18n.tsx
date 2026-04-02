@@ -1,12 +1,12 @@
-// lib/i18n.ts
+// lib/i18n.tsx
 "use client";
 
-import { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 
 // ─── 번역 타입 ───
 export type Locale = "ko" | "en";
 
-// ─── 번역 딕셔너리 ───
+// ─── 번역 딕셔너리 (as const 유지하여 자동완성 지원) ───
 export const translations = {
   ko: {
     // 공통
@@ -77,10 +77,12 @@ export const translations = {
       bizNumberLabel: "사업자등록번호",
       bizNumberLocked: "🔒 선택하신 회사의 사업자등록번호로 고정되었습니다.",
       bizNumberHint: "💡 정확한 회사 분류를 위해 사업자번호 입력이 필수입니다.",
-      nameLabel: "가입자 성함 (Full Name)",
+      nameLabel: "가입자 성함",
       namePlaceholder: "실명을 입력하세요",
-      jobTitleLabel: "직함 (Job Title)",
+      jobTitleLabel: "직함 (한글)",
       jobTitlePlaceholder: "예: 팀장, 대표, 매니저",
+      // ─── [변경 2] 영문 직함 ───
+      jobTitleEnLabel: "직함 (영문)",
       userTypeLabel: "회원 유형",
       userTypeOtherPlaceholder: "상세 유형 입력",
       preferredPartnersLabel: "관심 파트너 및 산업군",
@@ -92,6 +94,17 @@ export const translations = {
       existingUserLabel: "기존 가입자 확인용",
       investor: "[투자자]",
       startup: "[스타트업]",
+      companyNameEnLabel: "영문 회사명",
+      ceoNameKoLabel: "대표자 한글명",
+      ceoNameEnLabel: "대표자 영문명",
+      nameEnLabel: "가입자 영문 이름",
+      masterBadgeTitle: "귀사가 최초 등록되는 마스터 계정입니다.",
+      masterBadgeDesc: "입력하신 회사 정보는 이후 합류하는 팀원에게 자동 공유됩니다.",
+      privacyConsentLabel: "개인정보 처리방침에 동의합니다.",
+      privacyConsentDesc: "수집된 정보는 BizConnect 서비스 운영 목적으로만 사용되며, 제3자에게 제공되지 않습니다.",
+      // ─── [변경 3] LinkedIn ───
+      linkedinLabel: "LinkedIn 프로필",
+      linkedinHint: "LinkedIn 프로필 URL을 입력하시면 비즈니스 매칭 시 활용됩니다.",
     },
     // 바이어 대시보드
     buyer: {
@@ -322,6 +335,8 @@ export const translations = {
       namePlaceholder: "Enter your full name",
       jobTitleLabel: "Job Title",
       jobTitlePlaceholder: "e.g. Manager, CEO, Director",
+      // ─── [변경 2] 영문 직함 (영어에서는 단일 필드이므로 동일하게 표기) ───
+      jobTitleEnLabel: "Job Title (English)",
       userTypeLabel: "Member Type",
       userTypeOtherPlaceholder: "Enter details",
       preferredPartnersLabel: "Interests & Preferred Partners",
@@ -333,6 +348,17 @@ export const translations = {
       existingUserLabel: "Existing member",
       investor: "[Investor]",
       startup: "[Startup]",
+      companyNameEnLabel: "Company Name (English)",
+      ceoNameKoLabel: "CEO Name (Korean)",
+      ceoNameEnLabel: "CEO Name (English)",
+      nameEnLabel: "Your Name (English)",
+      masterBadgeTitle: "You are registering as the Master account for your company.",
+      masterBadgeDesc: "Company information you enter will be automatically shared with future team members.",
+      privacyConsentLabel: "I agree to the Privacy Policy.",
+      privacyConsentDesc: "Your information will only be used for BizConnect service operations and will not be shared with third parties.",
+      // ─── [변경 3] LinkedIn ───
+      linkedinLabel: "LinkedIn Profile",
+      linkedinHint: "Adding your LinkedIn URL helps improve business matching accuracy.",
     },
     buyer: {
       nav: {
@@ -463,7 +489,7 @@ export const translations = {
         noPending: "No new join requests.",
         approveBtn: "Approve",
         rejectBtn: "Reject",
-        transferBtn: "Transfer",
+        transferBtn: "Transfer Master",
         rejectedTitle: "Rejected Members",
         rejectionReason: "Rejection Reason",
       },
@@ -494,45 +520,54 @@ export const translations = {
   },
 } as const;
 
-export type TranslationKeys = typeof translations.ko;
-
-// ─── Context ───
-import React from "react";
+// ─── 해결의 핵심: 타입 정의 ───
+export type TranslationSchema = typeof translations.ko;
 
 interface I18nContextType {
   locale: Locale;
+  hasSelectedLocale: boolean;
+  isInitialized: boolean;
   setLocale: (locale: Locale) => void;
-  t: typeof translations.ko | typeof translations.en;
+  t: TranslationSchema;
 }
 
 export const I18nContext = createContext<I18nContextType>({
   locale: "ko",
+  hasSelectedLocale: true,
+  isInitialized: false,
   setLocale: () => {},
   t: translations.ko,
 });
 
-// ─── Provider ───
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("ko");
+  const [hasSelectedLocale, setHasSelectedLocale] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("locale") as Locale;
-    if (saved === "ko" || saved === "en") setLocaleState(saved);
+    if (saved === "ko" || saved === "en") {
+      setLocaleState(saved);
+      setHasSelectedLocale(true);
+    }
+    setIsInitialized(true);
   }, []);
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
+    setHasSelectedLocale(true);
     localStorage.setItem("locale", newLocale);
   };
 
+  const t = translations[locale] as any;
+
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t: translations[locale] }}>
+    <I18nContext.Provider value={{ locale, hasSelectedLocale, isInitialized, setLocale, t }}>
       {children}
     </I18nContext.Provider>
   );
 }
 
-// ─── Hook ───
 export function useI18n() {
   return useContext(I18nContext);
 }
