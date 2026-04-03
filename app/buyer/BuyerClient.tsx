@@ -300,20 +300,20 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     const data = confirmedMeetings.map((m: any) => {
       const meetingDate = new Date(m.timeSlot.startTime);
       return {
-        "미팅 일자 (Meeting Date)": meetingDate.toLocaleDateString('ko-KR'),
-        "미팅 시간 (Meeting Time)": meetingDate.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-        "상태 (Status)": meetingDate < new Date() ? "종료됨 (Completed)" : "예정됨 (Upcoming)",
-        "장소 (Location)": m.location || "미지정 (TBD)",
-        "업체명 (Company Name)": m.seller.companyName,
-        "담당자명 (PIC Name)": m.seller.name,
-        "담당자 직함 (Job Title)": m.seller.jobTitle || "-",
-        "담당자 이메일 (Email)": m.seller.email,
-        "담당자 연락처 (Phone)": m.seller.phone || "-",
-        "산업분야 (Industry Sector)": m.seller.onePager?.industrySector || "-",
-        "투자단계 (Investment Stage)": m.seller.onePager?.investmentStage || "-",
-        "주요제품/서비스 (Product/Service)": m.seller.onePager?.productType || "-",
-        "솔루션 요약 (Solution Summary)": m.seller.onePager?.solutionSummary || "-",
-        "홈페이지 (Website)": m.seller.onePager?.websiteUrl || "-"
+        [isEn ? "Meeting Date" : "미팅 일자 (Meeting Date)"]: meetingDate.toLocaleDateString(isEn ? 'en-US' : 'ko-KR'),
+        [isEn ? "Meeting Time" : "미팅 시간 (Meeting Time)"]: meetingDate.toLocaleTimeString(isEn ? 'en-US' : 'ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        [isEn ? "Status" : "상태 (Status)"]: meetingDate < new Date() ? (isEn ? "Completed" : "종료됨 (Completed)") : (isEn ? "Upcoming" : "예정됨 (Upcoming)"),
+        [isEn ? "Location" : "장소 (Location)"]: m.location || (isEn ? "TBD" : "미지정 (TBD)"),
+        [isEn ? "Company Name" : "업체명 (Company Name)"]: isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName,
+        [isEn ? "PIC Name" : "담당자명 (PIC Name)"]: isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name,
+        [isEn ? "Job Title" : "담당자 직함 (Job Title)"]: isEn ? (m.seller.jobTitleEn || m.seller.jobTitle || "-") : (m.seller.jobTitle || "-"),
+        [isEn ? "Email" : "담당자 이메일 (Email)"]: m.seller.email,
+        [isEn ? "Phone" : "담당자 연락처 (Phone)"]: m.seller.phone || "-",
+        [isEn ? "Industry Sector" : "산업분야 (Industry Sector)"]: localizeIndustry(m.seller.onePager?.industrySector, isEn) || "-",
+        [isEn ? "Investment Stage" : "투자단계 (Investment Stage)"]: m.seller.onePager?.investmentStage || "-",
+        [isEn ? "Product/Service" : "주요제품/서비스 (Product/Service)"]: m.seller.onePager?.productType || "-",
+        [isEn ? "Solution Summary" : "솔루션 요약 (Solution Summary)"]: m.seller.onePager?.solutionSummary || "-",
+        [isEn ? "Website" : "홈페이지 (Website)"]: m.seller.onePager?.websiteUrl || "-"
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -330,11 +330,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     const res = await updateProfileAction(new FormData(e.currentTarget));
     setIsPending(false);
     if (res.success) {
-      alert(locale === "ko" ? "✅ 모든 정보가 성공적으로 업데이트되었습니다." : "✅ All profile info updated.");
+      alert(isEn ? "✅ All profile info updated." : "✅ 모든 정보가 성공적으로 업데이트되었습니다.");
       setEditPassword("");
       setEditConfirmPassword("");
     } else {
-      alert(res.error || (locale === "ko" ? "수정 중 오류가 발생했습니다." : "Error occurred."));
+      alert(res.error || (isEn ? "Error occurred." : "수정 중 오류가 발생했습니다."));
     }
   };
 
@@ -344,19 +344,19 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     const minute = formData.get("minute") as string;
     const selectedDateTime = new Date(`${date}T${hour}:${minute}:00`);
     if (selectedDateTime < new Date()) {
-      alert(locale === "ko" ? "🚨 과거 시간으로는 슬롯을 생성할 수 없습니다. 현재 시간 이후를 선택해주세요." : "🚨 You cannot create slots in the past.");
+      alert(isEn ? "🚨 You cannot create slots in the past." : "🚨 과거 시간으로는 슬롯을 생성할 수 없습니다. 현재 시간 이후를 선택해주세요.");
       return;
     }
-    if (!confirm(locale === "ko" ? "선택한 시간에 새로운 상담 슬롯을 생성하시겠습니까?" : "Create new slot?")) return;
+    if (!confirm(isEn ? "Create new slot at the selected time?" : "선택한 시간에 새로운 상담 슬롯을 생성하시겠습니까?")) return;
     setIsPending(true);
     try { 
       const result = await createSlotAction(formData, buyerId);
       if (!result?.success) {
-        alert(`🚨 ${result?.error || "슬롯 생성에 실패했습니다."}`);
+        alert(`🚨 ${result?.error || (isEn ? "Failed to create slot." : "슬롯 생성에 실패했습니다.")}`);
         return;
       }
       handleTabClick('pending');
-      alert(locale === "ko" ? "신규 슬롯이 생성되었습니다." : "Success!");
+      alert(isEn ? "New slot created successfully." : "신규 슬롯이 생성되었습니다.");
       router.refresh();
     } finally { setIsPending(false); }
   };
@@ -369,19 +369,19 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     const minute = formData.get("minute") as string;
     const selectedDateTime = new Date(`${date}T${hour}:${minute}:00`);
     if (selectedDateTime < new Date()) {
-      alert(locale === "ko" ? "🚨 과거 시간으로 수정할 수 없습니다." : "🚨 Cannot update to past time.");
+      alert(isEn ? "🚨 Cannot update to past time." : "🚨 과거 시간으로 수정할 수 없습니다.");
       return;
     }
-    if (!confirm(locale === "ko" ? "해당 예약을 수정하시겠습니까?" : "Update reservation?")) return;
+    if (!confirm(isEn ? "Update this reservation?" : "해당 예약을 수정하시겠습니까?")) return;
     setIsPending(true);
     try {
       const result = await updateSlotAction(editingSlot.id, formData);
       if (!result?.success) {
-        alert(`🚨 ${result?.error || "슬롯 수정에 실패했습니다."}`);
+        alert(`🚨 ${result?.error || (isEn ? "Failed to update slot." : "슬롯 수정에 실패했습니다.")}`);
         return;
       }
       setEditingSlot(null);
-      alert(locale === "ko" ? "예약이 성공적으로 수정되었습니다." : "Updated.");
+      alert(isEn ? "Updated successfully." : "예약이 성공적으로 수정되었습니다.");
       router.refresh();
     } catch (error) {
       alert("Error.");
@@ -391,11 +391,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   };
 
   const handleDeleteSlot = async (slotId: number) => {
-    if (!confirm(locale === "ko" ? "🚨 정말 이 예약을 취소하시겠습니까?\n대기 중인 신청 건이 있다면 모두 자동 거절 처리됩니다." : "Cancel reservation?")) return;
+    if (!confirm(isEn ? "Cancel this reservation? Pending requests will be automatically rejected." : "🚨 정말 이 예약을 취소하시겠습니까?\n대기 중인 신청 건이 있다면 모두 자동 거절 처리됩니다.")) return;
     setIsPending(true);
     try {
       await deleteSlotAction(slotId);
-      alert(locale === "ko" ? "예약이 취소되었습니다." : "Cancelled.");
+      alert(isEn ? "Reservation cancelled." : "예약이 취소되었습니다.");
       router.refresh();
     } catch (error) {
       alert("Error.");
@@ -432,7 +432,10 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   };
 
   const handleApproveMatch = async (slot: any, meeting: any) => {
-    if (!confirm(locale === "ko" ? `${meeting.seller.companyName} 기업의 ${meeting.seller.name}님과 미팅을 최종 확정하시겠습니까?` : "Confirm match?")) return;
+    if (!confirm(isEn
+      ? `Confirm meeting with ${meeting.seller.companyNameEn || meeting.seller.companyName}?`
+      : `${meeting.seller.companyName} 기업의 ${meeting.seller.name}님과 미팅을 최종 확정하시겠습니까?`
+    )) return;
     setIsPending(true);
     try {
       await handleStatusAction(Number(meeting.id), Number(slot.id), 'ACCEPT', '');
@@ -446,8 +449,8 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   };
 
   const handleRejectMatch = async (meeting: any) => {
-    const defaultReason = locale === "ko" ? "현재 당사의 비즈니스 방향성과 맞지 않아 부득이하게 거절하게 되었습니다." : "Currently not matched.";
-    const userReason = prompt(locale === "ko" ? "거절 사유를 입력해주세요." : "Reason?", defaultReason);
+    const defaultReason = isEn ? "Currently not aligned with our business direction." : "현재 당사의 비즈니스 방향성과 맞지 않아 부득이하게 거절하게 되었습니다.";
+    const userReason = prompt(isEn ? "Please enter a rejection reason." : "거절 사유를 입력해주세요.", defaultReason);
     if (userReason === null) return; 
     setIsPending(true);
     try {
@@ -467,17 +470,17 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     <div className="flex bg-slate-100 p-1 rounded-[14px] shadow-inner shrink-0">
       <button 
         onClick={() => setMode('table')} 
-        title={locale === "ko" ? "테이블 뷰" : "Table View"} 
+        title={isEn ? "Table View" : "테이블 뷰"} 
         className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[11px] font-black transition-all ${mode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
       >
-        <LayoutList size={14}/> <span className="hidden sm:inline">{locale === "ko" ? "테이블" : "Table"}</span>
+        <LayoutList size={14}/> <span className="hidden sm:inline">{isEn ? "Table" : "테이블"}</span>
       </button>
       <button 
         onClick={() => setMode('card')} 
-        title={locale === "ko" ? "카드 뷰" : "Card View"} 
+        title={isEn ? "Card View" : "카드 뷰"} 
         className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[11px] font-black transition-all ${mode === 'card' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
       >
-        <LayoutGrid size={14}/> <span className="hidden sm:inline">{locale === "ko" ? "카드" : "Card"}</span>
+        <LayoutGrid size={14}/> <span className="hidden sm:inline">{isEn ? "Card" : "카드"}</span>
       </button>
     </div>
   );
@@ -509,22 +512,22 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <Activity size={20} className="animate-pulse" />
                 </div>
                 <h3 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight leading-tight">
-                  {locale === "ko" ? (
-                    <>새로운 미팅 요청이 <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">{totalPendingRequests}건</span> 대기 중입니다.</>
-                  ) : (
+                  {isEn ? (
                     <><span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">{totalPendingRequests}</span> meeting requests are pending review.</>
+                  ) : (
+                    <>새로운 미팅 요청이 <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">{totalPendingRequests}건</span> 대기 중입니다.</>
                   )}
                 </h3>
               </div>
               <p className="text-[13px] md:text-[15px] text-slate-500 font-bold leading-relaxed break-keep">
-                {locale === "ko" ? "유망한 기업들이 바이어님과의 미팅을 기다리고 있습니다. 상대 기업의 원페이저를 검토하고, 최적의 파트너를 선택해주세요." : "Promising companies are waiting to meet you. Review their one-pagers and select the best partner for your business."}
+                {isEn ? "Promising companies are waiting to meet you. Review their one-pagers and select the best partner for your business." : "유망한 기업들이 바이어님과의 미팅을 기다리고 있습니다. 상대 기업의 원페이저를 검토하고, 최적의 파트너를 선택해주세요."}
               </p>
             </div>
             <button onClick={() => setExpandedSection('pending')} className="w-full md:w-[35%] shrink-0">
               <div className="bg-slate-900 text-white p-5 md:p-6 rounded-[20px] md:rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-indigo-600 transition-all duration-300 shadow-xl hover:shadow-indigo-200/50 hover:-translate-y-1">
                 <FileSearch size={28} className="text-indigo-300 mb-1" />
                 <span className="font-black text-base md:text-lg">{t.buyer.pending.reviewBtn}</span>
-                <span className="text-[11px] md:text-xs text-indigo-200 font-bold flex items-center gap-1">{locale === "ko" ? "예약 관리로 이동" : "Go to Reservations"} <ArrowRight size={12} /></span>
+                <span className="text-[11px] md:text-xs text-indigo-200 font-bold flex items-center gap-1">{isEn ? "Go to Reservations" : "예약 관리로 이동"} <ArrowRight size={12} /></span>
               </div>
             </button>
           </div>
@@ -656,10 +659,13 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-sm font-black text-slate-700">{t.buyer.directory.analyzing}</p>
-                  <p className="text-xs text-slate-400 font-bold">{locale === 'ko' ? 'DB 데이터 + 웹 검색을 종합하고 있어요' : 'Combining database & web search insights'}</p>
+                  <p className="text-xs text-slate-400 font-bold">{isEn ? 'Combining database & web search insights' : 'DB 데이터 + 웹 검색을 종합하고 있어요'}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap justify-center">
-                  {["DB 분석", "웹 검색", "매칭 스코어 계산"].map((step, i) => (
+                  {(isEn
+                    ? ["DB Analysis", "Web Search", "Calculating Match Score"]
+                    : ["DB 분석", "웹 검색", "매칭 스코어 계산"]
+                  ).map((step, i) => (
                     <span key={step} className="px-3 py-1.5 bg-indigo-50 text-indigo-400 text-[10px] font-black rounded-full animate-pulse" style={{ animationDelay: `${i * 0.3}s` }}>
                       {step}
                     </span>
@@ -724,11 +730,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                         </div>
                         <div className="flex justify-between items-center pt-3 border-t border-slate-50">
                           <div className="text-[10px] font-bold text-slate-400">
-                            {locale === "ko" ? "대표" : "CEO"}: {d.ceoLabel}
+                            {isEn ? "CEO" : "대표"}: {d.ceoLabel}
                             {seller.members.length > 1 && <span className="text-indigo-500 ml-2 font-black">+{seller.members.length-1} Team</span>}
                           </div>
                           <div className="text-indigo-600 font-black text-[11px] flex items-center gap-1">
-                            {locale === "ko" ? "상세보기" : "Details"} <ChevronRight size={14}/>
+                            {isEn ? "Details" : "상세보기"} <ChevronRight size={14}/>
                           </div>
                         </div>
                       </div>
@@ -742,11 +748,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <table className="w-full text-left border-collapse min-w-[850px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
-                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "회사명" : "Company Name"}</th>
-                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "산업 분야" : "Industry Sector"}</th>
-                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "투자 단계" : "Investment Stage"}</th>
-                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "솔루션 요약" : "Solution Summary"}</th>
-                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{locale === "ko" ? "멤버/대표" : "PIC/CEO"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Company Name" : "회사명"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Industry Sector" : "산업 분야"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Investment Stage" : "투자 단계"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Solution Summary" : "솔루션 요약"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{isEn ? "PIC/CEO" : "멤버/대표"}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -783,10 +789,10 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               <td className="px-5 md:px-6 py-5 text-right">
                                 <div className="flex items-center justify-end gap-3">
                                   <div className="text-right">
-                                    <p className="text-[10px] font-bold text-slate-400">{locale === "ko" ? "대표" : "CEO"}: {d.ceoLabel}</p>
+                                    <p className="text-[10px] font-bold text-slate-400">{isEn ? "CEO" : "대표"}: {d.ceoLabel}</p>
                                     {seller.members.length > 1 && (
                                       <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-500 mt-1">
-                                        <UserIcon size={10}/> {locale === "ko" ? "멤버" : "Team"} {seller.members.length}{locale === "ko" ? "명" : ""}
+                                        <UserIcon size={10}/> {isEn ? "Team" : "멤버"} {seller.members.length}{isEn ? "" : "명"}
                                       </span>
                                     )}
                                   </div>
@@ -858,12 +864,12 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <table className="w-full text-left border-collapse min-w-[750px]">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "상태" : "Status"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "미팅 일자" : "Meeting Date"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "시간" : "Time"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "장소" : "Location"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "파트너사" : "Partner Company"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "담당자" : "PIC"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Status" : "상태"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Meeting Date" : "미팅 일자"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Time" : "시간"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Location" : "장소"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Partner Company" : "파트너사"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "PIC" : "담당자"}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -882,13 +888,19 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 bg-slate-100 rounded-[10px] flex items-center justify-center text-slate-400 shrink-0"><Building2 size={16}/></div>
                               <div>
-                                <p className="font-black text-sm text-slate-800 whitespace-nowrap">{m.seller.companyName}</p>
+                                <p className="font-black text-sm text-slate-800 whitespace-nowrap">
+                                  {isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName}
+                                </p>
                                 <p className="text-[10px] font-bold text-slate-400 mt-0.5">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || "-"}</p>
                               </div>
                             </div>
                           </td>
                           <td className="px-5 md:px-6 py-4">
-                            <p className="text-xs font-bold text-slate-700 whitespace-nowrap flex items-center gap-1"><UserIcon size={12} className="text-slate-400"/>{m.seller.name}{m.seller.jobTitle ? <span className="text-slate-400 ml-1">({m.seller.jobTitle})</span> : ''}</p>
+                            <p className="text-xs font-bold text-slate-700 whitespace-nowrap flex items-center gap-1">
+                              <UserIcon size={12} className="text-slate-400"/>
+                              {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
+                              {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? <span className="text-slate-400 ml-1">({isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})</span> : ''}
+                            </p>
                             <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{m.seller.email}</p>
                           </td>
                         </tr>
@@ -916,8 +928,14 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <div className={`mt-auto p-5 rounded-[24px] border space-y-4 ${m.isPast ? 'bg-white border-slate-100 opacity-80' : 'bg-slate-50 border-slate-100'}`}>
                       <div>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Partner Company & Rep</p>
-                        <p className={`font-black text-lg ${m.isPast ? 'text-slate-600' : 'text-slate-800'}`}>{m.seller.companyName}</p>
-                        <p className={`text-xs font-bold mt-1.5 flex items-center gap-1.5 ${m.isPast ? 'text-slate-500' : 'text-indigo-600'}`}><UserIcon size={14}/> {m.seller.name} {m.seller.jobTitle ? `(${m.seller.jobTitle})` : ''}</p>
+                        <p className={`font-black text-lg ${m.isPast ? 'text-slate-600' : 'text-slate-800'}`}>
+                          {isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName}
+                        </p>
+                        <p className={`text-xs font-bold mt-1.5 flex items-center gap-1.5 ${m.isPast ? 'text-slate-500' : 'text-indigo-600'}`}>
+                          <UserIcon size={14}/>
+                          {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
+                          {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? ` (${isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})` : ''}
+                        </p>
                       </div>
                       <div className="border-t border-slate-200/60 pt-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Meeting Location</p>
@@ -968,12 +986,12 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <table className="w-full text-left border-collapse min-w-[960px]">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "상태" : "Status"}</th>
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "미팅 일자" : "Meeting Date"}</th>
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "시간" : "Time"}</th>
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "장소" : "Loc"}</th>
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "신청 기업" : "Company"}</th>
-                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "담당자" : "PIC"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Status" : "상태"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Meeting Date" : "미팅 일자"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Time" : "시간"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Loc" : "장소"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Company" : "신청 기업"}</th>
+                        <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "PIC" : "담당자"}</th>
                         <th className="px-5 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-center">{t.buyer.pending.reviewBtn}</th>
                       </tr>
                     </thead>
@@ -994,8 +1012,8 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               <td colSpan={2} className="px-5 py-4"><span className="text-xs text-slate-400 font-bold flex items-center gap-1.5"><Inbox size={13}/> {t.buyer.pending.noRequests}</span></td>
                               <td className="px-5 py-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
-                                  <button onClick={() => setEditingSlot(slot)} title={t.buyer.profile.title} className="p-1.5 text-slate-400 bg-white border border-slate-200 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all"><Edit2 size={14}/></button>
-                                  <button onClick={() => handleDeleteSlot(slot.id)} title={t.common.cancel} className="p-1.5 text-slate-400 bg-white border border-slate-200 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 rounded-lg transition-all"><Trash2 size={14}/></button>
+                                  <button onClick={() => setEditingSlot(slot)} title={isEn ? "Edit" : "수정"} className="p-1.5 text-slate-400 bg-white border border-slate-200 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all"><Edit2 size={14}/></button>
+                                  <button onClick={() => handleDeleteSlot(slot.id)} title={isEn ? "Cancel" : "취소"} className="p-1.5 text-slate-400 bg-white border border-slate-200 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 rounded-lg transition-all"><Trash2 size={14}/></button>
                                 </div>
                               </td>
                             </tr>
@@ -1013,7 +1031,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                   <td rowSpan={activeRequests.length} className="px-5 py-4 align-middle border-r border-slate-100">
                                     <div className="flex flex-col gap-2">
                                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black whitespace-nowrap ${slot.status === 'CLOSED' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>{slot.status === 'CLOSED' ? 'MATCHED' : 'OPEN'}</span>
-                                      {activeRequests.length > 1 && <span className="inline-flex items-center gap-1 text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap"><Users size={9}/> {activeRequests.length}{locale === "ko" ? "건 신청" : " requests"}</span>}
+                                      {activeRequests.length > 1 && <span className="inline-flex items-center gap-1 text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap"><Users size={9}/> {activeRequests.length}{isEn ? " requests" : "건 신청"}</span>}
                                     </div>
                                   </td>
                                   <td rowSpan={activeRequests.length} className="px-5 py-4 align-middle border-r border-slate-100"><span className="text-sm font-black text-slate-700 whitespace-nowrap">{formatDateWithDay(slot.startTime)}</span></td>
@@ -1036,8 +1054,10 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                   <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${isConfirmed ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}><Building2 size={15}/></div>
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <p className="font-black text-sm text-slate-800 whitespace-nowrap">{m.seller.companyName}</p>
-                                      {isConfirmed && <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap"><CheckCircle2 size={9}/> {locale === "ko" ? "확정" : "Done"}</span>}
+                                      <p className="font-black text-sm text-slate-800 whitespace-nowrap">
+                                        {isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName}
+                                      </p>
+                                      {isConfirmed && <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap"><CheckCircle2 size={9}/> {isEn ? "Done" : "확정"}</span>}
                                     </div>
                                     <p className="text-[10px] font-bold text-slate-400 mt-0.5 whitespace-nowrap">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || (isEn ? 'N/A' : '산업 미지정')}</p>
                                   </div>
@@ -1045,14 +1065,20 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               </td>
                               <td className="px-5 py-3.5">
                                 <div className="space-y-0.5">
-                                  <p className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1.5"><UserIcon size={11} className="text-slate-400 shrink-0"/>{m.seller.name}{m.seller.jobTitle && <span className="text-[10px] font-bold text-slate-400">({m.seller.jobTitle})</span>}</p>
+                                  <p className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1.5">
+                                    <UserIcon size={11} className="text-slate-400 shrink-0"/>
+                                    {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
+                                    {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) && (
+                                      <span className="text-[10px] font-bold text-slate-400">({isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})</span>
+                                    )}
+                                  </p>
                                   {m.seller.email && <p className="text-[10px] font-bold text-indigo-400 pl-[19px] whitespace-nowrap">{m.seller.email}</p>}
                                   {m.seller.phone && <p className="text-[10px] font-bold text-slate-400 pl-[19px] whitespace-nowrap flex items-center gap-1"><Phone size={9}/>{m.seller.phone}</p>}
                                 </div>
                               </td>
                               <td className="px-5 py-3.5 text-center">
                                 {isConfirmed
-                                  ? <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 whitespace-nowrap"><CheckCircle2 size={12}/> {locale === "ko" ? "매칭 확정" : "Matched"}</span>
+                                  ? <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 whitespace-nowrap"><CheckCircle2 size={12}/> {isEn ? "Matched" : "매칭 확정"}</span>
                                   : slot.status !== 'CLOSED'
                                     ? <button onClick={() => setReviewingMeeting({ slot, meeting: m })} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black rounded-[10px] hover:bg-indigo-600 transition-colors whitespace-nowrap shadow-sm hover:shadow-indigo-200 flex items-center gap-1.5 mx-auto"><FileSearch size={12}/> {t.buyer.pending.reviewBtn}</button>
                                     : <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">—</span>
@@ -1105,14 +1131,20 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                   <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 border border-indigo-100"><Building2 size={18}/></div>
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-black text-slate-800 text-sm truncate">{m.seller.companyName}</span>
+                                      <span className="font-black text-slate-800 text-sm truncate">
+                                        {isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName}
+                                      </span>
                                       <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md whitespace-nowrap">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || (isEn ? "N/A" : "산업 미지정")}</span>
                                     </div>
-                                    <p className="text-[11px] font-bold text-slate-500 mt-1 flex items-center gap-1 truncate"><UserIcon size={12}/> {m.seller.name} {m.seller.jobTitle ? `(${m.seller.jobTitle})` : ''}</p>
+                                    <p className="text-[11px] font-bold text-slate-500 mt-1 flex items-center gap-1 truncate">
+                                      <UserIcon size={12}/>
+                                      {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
+                                      {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? ` (${isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})` : ''}
+                                    </p>
                                   </div>
                                 </div>
                                 {slot.status !== 'CLOSED' && <button onClick={() => setReviewingMeeting({ slot, meeting: m })} className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 text-white text-xs font-black rounded-[12px] hover:bg-indigo-600 transition-colors shrink-0">{t.buyer.pending.detailReview}</button>}
-                                {slot.status === 'CLOSED' && m.status === 'CONFIRMED' && <span className="text-xs font-black text-emerald-500 flex items-center justify-center gap-1.5 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100"><CheckCircle2 size={14}/> {locale === "ko" ? "매칭 확정" : "Matched"}</span>}
+                                {slot.status === 'CLOSED' && m.status === 'CONFIRMED' && <span className="text-xs font-black text-emerald-500 flex items-center justify-center gap-1.5 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100"><CheckCircle2 size={14}/> {isEn ? "Matched" : "매칭 확정"}</span>}
                               </div>
                             );
                           })}
@@ -1145,13 +1177,13 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <div className="space-y-2">
                     <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.hourLabel}</label>
                     <select name="hour" className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none appearance-none transition-all cursor-pointer">
-                      {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{locale === "ko" ? "시" : ""}</option>)}
+                      {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{isEn ? "" : "시"}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.minuteLabel}</label>
                     <select name="minute" className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none appearance-none transition-all cursor-pointer">
-                      <option value="00">00{locale === "ko" ? "분" : ""}</option><option value="30">30{locale === "ko" ? "분" : ""}</option>
+                      <option value="00">00{isEn ? "" : "분"}</option><option value="30">30{isEn ? "" : "분"}</option>
                     </select>
                   </div>
                 </div>
@@ -1188,7 +1220,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <div key={name} className="space-y-2.5">
                       <div className="flex justify-between text-[11px] md:text-xs font-black">
                         <span className="text-slate-600">{localizeIndustry(name, isEn)}</span>
-                        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{count}{locale === "ko" ? "개사" : " cos"} ({((count/uniqueSellers.length)*100).toFixed(1)}%)</span>
+                        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{count}{isEn ? " cos" : "개사"} ({((count/uniqueSellers.length)*100).toFixed(1)}%)</span>
                       </div>
                       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                         <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{width:`${(count/uniqueSellers.length)*100}%`}}></div>
@@ -1208,7 +1240,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <div key={name} className="space-y-2.5">
                       <div className="flex justify-between text-[11px] md:text-xs font-black">
                         <span className="text-slate-300">{name}</span>
-                        <span className="text-indigo-300 bg-white/10 px-2 py-0.5 rounded-md">{count}{locale === "ko" ? "개사" : " cos"}</span>
+                        <span className="text-indigo-300 bg-white/10 px-2 py-0.5 rounded-md">{count}{isEn ? " cos" : "개사"}</span>
                       </div>
                       <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
                         <div className="h-full bg-indigo-400 rounded-full transition-all duration-1000" style={{width:`${(count/uniqueSellers.length)*100}%`}}></div>
@@ -1231,13 +1263,17 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <div className="w-14 h-14 md:w-16 md:h-16 shrink-0 bg-slate-900 rounded-[18px] md:rounded-3xl flex items-center justify-center text-white shadow-xl"><UserIcon size={28}/></div>
                   <div className="overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                      <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">[{user.companyName}] {user.name}{locale === "ko" ? " 님" : ""}</h3>
+                      <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">
+                        [{isEn ? (user.companyNameEn || user.companyName) : user.companyName}] {isEn ? (user.nameEn || user.name) : user.name}{isEn ? "" : " 님"}
+                      </h3>
                       {user.isMaster
                         ? <span className="w-fit px-2.5 py-1 bg-indigo-600 text-white text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1 shadow-md shadow-indigo-100"><ShieldCheck size={12}/> MASTER</span>
                         : <span className="w-fit px-2.5 py-1 bg-slate-100 text-slate-500 text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1"><Users size={12}/> MEMBER</span>
                       }
                     </div>
-                    <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1 md:mt-2 uppercase tracking-widest truncate">{user.jobTitle} | Account Settings</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1 md:mt-2 uppercase tracking-widest truncate">
+                      {isEn ? (user.jobTitleEn || user.jobTitle) : user.jobTitle} | Account Settings
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1247,7 +1283,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 {/* ── 개인정보 (마스터/멤버 공통) ── */}
                 <div>
                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-slate-100 pb-3">
-                    <UserIcon size={14}/> {locale === "ko" ? "개인 정보" : "Personal Info"}
+                    <UserIcon size={14}/> {isEn ? "Personal Info" : "개인 정보"}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                     {/* 이메일 (고정) */}
@@ -1258,12 +1294,12 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     </div>
                     {/* 성함 (한글) */}
                     <div className="flex flex-col space-y-2">
-                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {locale === "ko" ? "성함 (한글)" : "Full Name"}</p>
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {isEn ? "Full Name (KR)" : "성함 (한글)"}</p>
                       <input name="name" defaultValue={user.name} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
                     </div>
                     {/* 영문 이름 */}
                     <div className="flex flex-col space-y-2">
-                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {locale === "ko" ? "영문 이름" : "Name (EN)"}</p>
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {isEn ? "Full Name (EN)" : "영문 이름"}</p>
                       <input name="nameEn" defaultValue={user.nameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
                     </div>
                     {/* 연락처 */}
@@ -1273,12 +1309,12 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     </div>
                     {/* 직함 (한글) */}
                     <div className="flex flex-col space-y-2">
-                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {locale === "ko" ? "직함 (한글)" : "Job Title"}</p>
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {isEn ? "Job Title (KR)" : "직함 (한글)"}</p>
                       <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
                     </div>
                     {/* 직함 (영문) */}
                     <div className="flex flex-col space-y-2">
-                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {locale === "ko" ? "직함 (영문)" : "Job Title (EN)"}</p>
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {isEn ? "Job Title (EN)" : "직함 (영문)"}</p>
                       <input name="jobTitleEn" defaultValue={user.jobTitleEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
                     </div>
                     {/* 새 비밀번호 */}
@@ -1295,7 +1331,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <div className="flex flex-col space-y-3 md:col-span-2 pt-2 border-t border-slate-100">
                       <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Target size={12}/> {t.buyer.profile.userTypeLabel}</p>
                       <div className="flex gap-2 flex-wrap">
-                        {["VC","AC", locale === "ko" ? "바이어" : "Buyer", locale === "ko" ? "스타트업" : "Startup", locale === "ko" ? "기타" : "Other"].map((v) => (
+                        {["VC","AC", isEn ? "Buyer" : "바이어", isEn ? "Startup" : "스타트업", isEn ? "Other" : "기타"].map((v) => (
                           <label key={v} className={`flex-1 min-w-[72px] text-center p-3 md:p-4 rounded-[16px] cursor-pointer text-xs md:text-sm font-black transition-all border ${editSelectedType === v ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"}`}>
                             <input type="radio" name="userType" value={v} className="hidden" checked={editSelectedType === v} onChange={(e) => setEditSelectedType(e.target.value)}/>
                             {v}
@@ -1319,48 +1355,48 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   </div>
                 </div>
 
-{/* ── 마스터 전용: 회사 공통 정보 ── */}
-{user.isMaster && (
-  <div>
-    <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-indigo-50 pb-3">
-      <Building2 size={14}/> {locale === "ko" ? "회사 공통 정보 (마스터 전용)" : "Company Info — Master Only"}
-    </h4>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "회사명 (한글)" : "Company (KR)"}</p>
-        <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "회사명 (영문)" : "Company (EN)"}</p>
-        <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "대표자 (한글)" : "CEO (KR)"}</p>
-        <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "대표자 (영문)" : "CEO (EN)"}</p>
-        <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "산업 분야" : "Industry Sector"}</p>
-        <input name="industrySector" defaultValue={user.industrySector || user.onePager?.industrySector} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "설립연도" : "Year Founded"}</p>
-        <input name="yearFounded" defaultValue={user.yearFounded || user.onePager?.yearFounded} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "투자 단계" : "Investment Stage"}</p>
-        <input name="investmentStage" defaultValue={user.investmentStage || user.onePager?.investmentStage} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-      <div className="flex flex-col space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "핵심 기술" : "Primary Tech"}</p>
-        <input name="primaryTech" defaultValue={user.primaryTech || user.onePager?.primaryTech} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-      </div>
-    </div>
-  </div>
-)}
+                {/* ── 마스터 전용: 회사 공통 정보 ── */}
+                {user.isMaster && (
+                  <div>
+                    <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-indigo-50 pb-3">
+                      <Building2 size={14}/> {isEn ? "Company Info — Master Only" : "회사 공통 정보 (마스터 전용)"}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Company (KR)" : "회사명 (한글)"}</p>
+                        <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Company (EN)" : "회사명 (영문)"}</p>
+                        <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "CEO (KR)" : "대표자 (한글)"}</p>
+                        <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "CEO (EN)" : "대표자 (영문)"}</p>
+                        <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Industry Sector" : "산업 분야"}</p>
+                        <input name="industrySector" defaultValue={user.industrySector || user.onePager?.industrySector} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Year Founded" : "설립연도"}</p>
+                        <input name="yearFounded" defaultValue={user.yearFounded || user.onePager?.yearFounded} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Investment Stage" : "투자 단계"}</p>
+                        <input name="investmentStage" defaultValue={user.investmentStage || user.onePager?.investmentStage} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Primary Tech" : "핵심 기술"}</p>
+                        <input name="primaryTech" defaultValue={user.primaryTech || user.onePager?.primaryTech} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 저장 버튼 */}
                 <button
@@ -1385,7 +1421,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
             <div className="bg-indigo-600 px-6 md:px-8 py-5 md:py-6 flex justify-between items-center text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
               <div className="relative z-10">
-                <h3 className="text-lg md:text-xl font-black flex items-center gap-2"><Edit2 size={20}/> {locale === "ko" ? "예약 일정/장소 수정" : "Edit Slot"}</h3>
+                <h3 className="text-lg md:text-xl font-black flex items-center gap-2"><Edit2 size={20}/> {isEn ? "Edit Slot Date / Location" : "예약 일정/장소 수정"}</h3>
                 <p className="text-[11px] text-indigo-200 font-bold mt-1 tracking-widest uppercase">Edit Reservation Slot</p>
               </div>
               <button onClick={() => setEditingSlot(null)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors relative z-10"><X size={20}/></button>
@@ -1404,7 +1440,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       {hasRequests && (
                         <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-sm text-amber-700 flex gap-2.5 items-start leading-relaxed shadow-sm">
                           <AlertCircle size={18} className="shrink-0 mt-0.5"/>
-                          <p>{locale === "ko" ? "미팅 신청 기업이 있어 장소만 변경 가능합니다." : "Only location can be modified because there are pending requests."}</p>
+                          <p>{isEn ? "Only location can be modified because there are pending requests." : "미팅 신청 기업이 있어 장소만 변경 가능합니다."}</p>
                         </div>
                       )}
                       <div className="space-y-1.5">
@@ -1415,24 +1451,24 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                         <div className="space-y-1.5">
                           <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.buyer.generator.hourLabel}</label>
                           <select name="hour" defaultValue={defaultHour} disabled={hasRequests} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none appearance-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 cursor-pointer'}`}>
-                            {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{locale === "ko" ? "시" : ""}</option>)}
+                            {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{isEn ? "" : "시"}</option>)}
                           </select>
                           {hasRequests && <input type="hidden" name="hour" value={defaultHour}/>}
                         </div>
                         <div className="space-y-1.5">
                           <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.buyer.generator.minuteLabel}</label>
                           <select name="minute" defaultValue={defaultMinute} disabled={hasRequests} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none appearance-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 cursor-pointer'}`}>
-                            <option value="00">00{locale === "ko" ? "분" : ""}</option><option value="30">30{locale === "ko" ? "분" : ""}</option>
+                            <option value="00">00{isEn ? "" : "분"}</option><option value="30">30{isEn ? "" : "분"}</option>
                           </select>
                           {hasRequests && <input type="hidden" name="minute" value={defaultMinute}/>}
                         </div>
                       </div>
                       <div className="space-y-1.5 pt-1">
                         <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.locationLabel}</label>
-                        <input name="location" required defaultValue={editingSlot.location} placeholder="장소 혹은 온라인 여부" className="w-full p-4 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[16px] text-sm font-bold outline-none transition-all"/>
+                        <input name="location" required defaultValue={editingSlot.location} placeholder={isEn ? "Location or Online" : "장소 혹은 온라인 여부"} className="w-full p-4 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[16px] text-sm font-bold outline-none transition-all"/>
                       </div>
                       <button disabled={isPending} className="w-full py-4 bg-slate-900 text-white rounded-[16px] font-black text-base hover:bg-indigo-600 transition-all active:scale-[0.98] mt-4 flex justify-center items-center gap-2">
-                        {isPending ? t.common.loading : <><Save size={18}/> {locale === "ko" ? "수정 완료" : "Update Changes"}</>}
+                        {isPending ? t.common.loading : <><Save size={18}/> {isEn ? "Update Changes" : "수정 완료"}</>}
                       </button>
                     </>
                   );
@@ -1451,7 +1487,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
               <div className="relative z-10">
                 <h3 className="text-lg md:text-xl font-black flex items-center gap-2"><Search size={20} className="text-indigo-400"/> {t.buyer.pending.reviewBtn}</h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">{locale === 'ko' ? '미팅 요청 검토' : 'Review Meeting Request'}</p>
+                <p className="text-xs text-slate-400 font-bold mt-1">{isEn ? 'Review Meeting Request' : '미팅 요청 검토'}</p>
               </div>
               <button onClick={() => setReviewingMeeting(null)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors relative z-10"><X size={20}/></button>
             </div>
@@ -1460,8 +1496,13 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 <div className="w-12 h-12 bg-white rounded-[16px] shadow-sm border border-slate-100 flex items-center justify-center text-indigo-500 shrink-0"><Building2 size={24}/></div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <h4 className="text-lg font-black text-slate-900">{reviewingMeeting.meeting.seller.companyName}</h4>
-                    <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 border border-indigo-100"><UserIcon size={12}/> {reviewingMeeting.meeting.seller.name}</span>
+                    <h4 className="text-lg font-black text-slate-900">
+                      {isEn ? (reviewingMeeting.meeting.seller.companyNameEn || reviewingMeeting.meeting.seller.companyName) : reviewingMeeting.meeting.seller.companyName}
+                    </h4>
+                    <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 border border-indigo-100">
+                      <UserIcon size={12}/>
+                      {isEn ? (reviewingMeeting.meeting.seller.nameEn || reviewingMeeting.meeting.seller.name) : reviewingMeeting.meeting.seller.name}
+                    </span>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md">{localizeIndustry(reviewingMeeting.meeting.seller.onePager?.industrySector, isEn) || "-"}</span>
                   <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed italic">"{reviewingMeeting.meeting.seller.onePager?.solutionSummary || t.buyer.directory.noResults}"</p>
@@ -1474,19 +1515,19 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 }}
                 className="w-full py-4 bg-white border-2 border-indigo-100 text-indigo-600 font-black rounded-[20px] flex justify-center items-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-colors shadow-sm"
               >
-                <FileSearch size={18}/> {locale === "ko" ? "기업 상세 프로필 확인 (One-Pager)" : "View Detailed One-Pager"}
+                <FileSearch size={18}/> {isEn ? "View Detailed One-Pager" : "기업 상세 프로필 확인 (One-Pager)"}
               </button>
               <div className="bg-amber-50 border border-amber-100 text-amber-700 text-[11px] font-bold p-4 rounded-2xl flex items-start gap-2 leading-relaxed">
                 <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-500"/>
-                <p>{locale === "ko" ? "승인 시 동일 슬롯 대기 중인 다른 기업들은 '타기업 매칭' 사유로 자동 거절됩니다." : "Approving this will automatically reject others in the same slot."}</p>
+                <p>{isEn ? "Approving this will automatically reject others in the same slot." : "승인 시 동일 슬롯 대기 중인 다른 기업들은 '타기업 매칭' 사유로 자동 거절됩니다."}</p>
               </div>
             </div>
             <div className="p-4 md:p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
               <button onClick={() => handleRejectMatch(reviewingMeeting.meeting)} disabled={isPending} className="flex-1 py-4 bg-white text-rose-500 border border-slate-200 font-black rounded-[20px] flex justify-center items-center gap-2 hover:bg-rose-50 transition-colors disabled:opacity-50 shadow-sm">
-                <XCircle size={18}/> {t.seller.team.rejectBtn}
+                <XCircle size={18}/> {isEn ? "Reject" : "거절"}
               </button>
               <button onClick={() => handleApproveMatch(reviewingMeeting.slot, reviewingMeeting.meeting)} disabled={isPending} className="flex-[1.5] py-4 bg-emerald-500 text-white font-black rounded-[20px] shadow-lg shadow-emerald-200 flex justify-center items-center gap-2 hover:bg-emerald-600 transition-colors disabled:opacity-50">
-                {isPending ? t.common.loading : <><Check size={18}/> {locale === "ko" ? "매칭 확정" : "Confirm Match"}</>}
+                {isPending ? t.common.loading : <><Check size={18}/> {isEn ? "Confirm Match" : "매칭 확정"}</>}
               </button>
             </div>
           </div>
@@ -1518,7 +1559,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <div className="p-2 md:p-2.5 bg-indigo-600 text-white rounded-[12px] md:rounded-[14px] shadow-md shadow-indigo-200"><Award size={20} className="md:w-6 md:h-6"/></div>
                   <div className="text-left">
                     <h3 className="text-base md:text-xl font-black text-slate-900 leading-none">Business One-Pager</h3>
-                    <p className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">{locale === 'ko' ? '상세 정보 조회' : 'Detail View'}</p>
+                    <p className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">{isEn ? 'Detail View' : '상세 정보 조회'}</p>
                   </div>
                 </div>
                 <button
@@ -1554,12 +1595,12 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                         )}
                         {op.yearFounded && (
                           <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-black border border-emerald-100">
-                            {locale === "ko" ? "설립" : "Est."} {op.yearFounded}{locale === "ko" ? "년" : ""}
+                            {isEn ? "Est." : "설립"} {op.yearFounded}{isEn ? "" : "년"}
                           </span>
                         )}
                         {displayCeo && displayCeo !== "-" && (
                           <span className="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-black border border-amber-100">
-                            {locale === "ko" ? "대표" : "CEO"}: {displayCeo}
+                            {isEn ? "CEO" : "대표"}: {displayCeo}
                           </span>
                         )}
                       </div>
@@ -1587,7 +1628,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     {/* Key Product */}
                     <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
                       <h5 className="flex items-center gap-2 text-indigo-600 font-black text-[11px] uppercase tracking-widest">
-                        <Sparkles size={15}/> {locale === "ko" ? "주요 제품 및 서비스" : "Key Product"}
+                        <Sparkles size={15}/> {isEn ? "Key Product" : "주요 제품 및 서비스"}
                       </h5>
                       <p className="text-lg md:text-xl font-black text-slate-800 leading-snug">{op.productType || <span className="text-slate-300 font-medium text-sm">—</span>}</p>
                       {op.solutionSummary && (
@@ -1600,7 +1641,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     {/* Problem */}
                     <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
                       <h5 className="flex items-center gap-2 text-rose-500 font-black text-[11px] uppercase tracking-widest">
-                        <Target size={15}/> {locale === "ko" ? "마켓 문제점" : "Problem"}
+                        <Target size={15}/> {isEn ? "Problem" : "마켓 문제점"}
                       </h5>
                       <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
                         {op.problem || <span className="text-slate-300">—</span>}
@@ -1610,7 +1651,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     {/* Traction */}
                     <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
                       <h5 className="flex items-center gap-2 text-emerald-600 font-black text-[11px] uppercase tracking-widest">
-                        <TrendingUp size={15}/> {locale === "ko" ? "성과 및 지표" : "Traction"}
+                        <TrendingUp size={15}/> {isEn ? "Traction" : "성과 및 지표"}
                       </h5>
                       <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
                         {op.traction || <span className="text-slate-300">—</span>}
@@ -1623,7 +1664,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     {/* Solution */}
                     <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
                       <h5 className="flex items-center gap-2 text-amber-500 font-black text-[11px] uppercase tracking-widest">
-                        <Lightbulb size={15}/> {locale === "ko" ? "해결 방안" : "Solution"}
+                        <Lightbulb size={15}/> {isEn ? "Solution" : "해결 방안"}
                       </h5>
                       <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
                         {op.solution || <span className="text-slate-300">—</span>}
@@ -1633,7 +1674,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     {/* Biz Model */}
                     <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
                       <h5 className="flex items-center gap-2 text-blue-500 font-black text-[11px] uppercase tracking-widest">
-                        <Briefcase size={15}/> {locale === "ko" ? "비즈니스 모델" : "Biz Model"}
+                        <Briefcase size={15}/> {isEn ? "Biz Model" : "비즈니스 모델"}
                       </h5>
                       <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
                         {op.bizModel || <span className="text-slate-300">—</span>}
@@ -1679,7 +1720,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               {/* 이름 / 직함 */}
                               <div className="flex items-start justify-between gap-3">
                                 <span className="text-[10px] text-slate-500 font-bold shrink-0 pt-0.5">
-                                  {locale === "ko" ? "이름 / 직함" : "Name / Title"}
+                                  {isEn ? "Name / Title" : "이름 / 직함"}
                                 </span>
                                 <span className="font-black text-white text-sm text-right">
                                   {mPicName}
@@ -1691,7 +1732,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               {memberEmail && (
                                 <div className="flex items-center justify-between gap-3">
                                   <span className="text-[10px] text-slate-500 font-bold shrink-0">
-                                    {locale === "ko" ? "이메일" : "Email"}
+                                    {isEn ? "Email" : "이메일"}
                                   </span>
                                   <a
                                     href={`mailto:${memberEmail}`}
@@ -1706,7 +1747,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               {memberPhone && (
                                 <div className="flex items-center justify-between gap-3">
                                   <span className="text-[10px] text-slate-500 font-bold shrink-0">
-                                    {locale === "ko" ? "연락처" : "Phone"}
+                                    {isEn ? "Phone" : "연락처"}
                                   </span>
                                   <a
                                     href={`tel:${memberPhone}`}
@@ -1753,7 +1794,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       className="flex-[2] flex items-center justify-center gap-2 bg-slate-900 text-white py-4 rounded-[16px] font-black text-sm shadow-lg hover:bg-indigo-600 transition-all active:scale-[0.98]"
                     >
                       <FileText size={18}/>
-                      {locale === "ko" ? "피치덱 다운로드" : "Download Pitch Deck"}
+                      {isEn ? "Download Pitch Deck" : "피치덱 다운로드"}
                       <ExternalLink size={13} className="opacity-60"/>
                     </a>
                   )}
@@ -1761,7 +1802,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     onClick={() => setSelectedOnePager(null)}
                     className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm"
                   >
-                    {locale === "ko" ? "닫기" : "Close"}
+                    {isEn ? "Close" : "닫기"}
                   </button>
                 </div>
               </div>

@@ -122,7 +122,9 @@ function RejectedScreen({ user }: { user: any }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             <div className="space-y-2 md:col-span-2 relative">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회사명 (Company Name)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "회사명 (Company Name)" : "Company Name"}
+              </label>
               <input 
                 name="companyName" 
                 placeholder={locale === "ko" ? "회사명을 입력하세요" : "Enter company name"} 
@@ -139,7 +141,9 @@ function RejectedScreen({ user }: { user: any }) {
               />
               {similarCompanies.length > 0 && !isSameCompanyConfirmed && (
                 <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95">
-                  <p className="text-xs font-black text-slate-500">{locale === "ko" ? "이미 등록된 유사한 회사가 있습니다. 소속 회사를 선택해 주세요." : "Similar company already exists. Please select yours."}</p>
+                  <p className="text-xs font-black text-slate-500">
+                    {locale === "ko" ? "이미 등록된 유사한 회사가 있습니다. 소속 회사를 선택해 주세요." : "Similar company already exists. Please select yours."}
+                  </p>
                   <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                     {similarCompanies.map((comp) => (
                       <button
@@ -166,7 +170,7 @@ function RejectedScreen({ user }: { user: any }) {
                             )}
                           </div>
                           <p className="text-[10px] text-slate-400">
-                            {locale === "ko" ? "기존 가입자 확인용:" : "Registered user:"} {comp.name}님
+                            {locale === "ko" ? "기존 가입자 확인용:" : "Registered user:"} {comp.name}
                             <span className="ml-2 font-bold text-blue-500">{comp.role === "BUYER" ? (locale === "ko" ? "[투자자]" : "[Investor]") : (locale === "ko" ? "[스타트업]" : "[Startup]")}</span>
                           </p>
                         </div>
@@ -182,7 +186,9 @@ function RejectedScreen({ user }: { user: any }) {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">사업자등록번호 (Business Number)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "사업자등록번호 (Business Number)" : "Business Number"}
+              </label>
               <input
                 name="businessNumber"
                 placeholder="000-00-00000"
@@ -205,22 +211,30 @@ function RejectedScreen({ user }: { user: any }) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">가입자 성함 (Full Name)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "가입자 성함 (Full Name)" : "Full Name"}
+              </label>
               <input name="name" defaultValue={user.name} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">직함 (Job Title)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "직함 (Job Title)" : "Job Title"}
+              </label>
               <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">전화번호 (Phone)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "전화번호 (Phone)" : "Phone"}
+              </label>
               <input name="phone" value={phone} onChange={handlePhoneChange} maxLength={13} required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-blue-500 outline-none font-bold transition-all text-sm md:text-base" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">기업 분류 (User Type)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "기업 분류 (User Type)" : "User Type"}
+              </label>
               <div className="flex gap-2 flex-wrap mt-1">
                 {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
                   <label key={v} className={`flex-1 min-w-[70px] text-center p-3 border rounded-[16px] cursor-pointer text-xs font-black transition-all ${selectedType === v ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100"}`}>
@@ -235,7 +249,9 @@ function RejectedScreen({ user }: { user: any }) {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">관심 파트너 및 산업군 (Interests)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
+                {locale === "ko" ? "관심 파트너 및 산업군 (Interests)" : "Interests"}
+              </label>
               <textarea name="preferredPartners" defaultValue={user.preferredPartners} placeholder={locale === "ko" ? "선호하는 파트너를 기재해주세요." : "Please describe preferred partners."} className="w-full p-5 bg-slate-50 rounded-[20px] border border-transparent focus:bg-white focus:border-blue-500 outline-none resize-none h-28 font-bold transition-all" />
             </div>
           </div>
@@ -369,13 +385,13 @@ export default function SellerClient({
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiError(data.error || (locale === "ko" ? "검색 중 오류가 발생했습니다." : "An error occurred during search."));
+        setAiError(data.error || (isEn ? "An error occurred during search." : "검색 중 오류가 발생했습니다."));
         return;
       }
       setAiResults(data.results || []);
       setAiIsFallback(data.isFallback || false);
     } catch (e) {
-      setAiError(locale === "ko" ? "네트워크 오류가 발생했습니다. 다시 시도해주세요." : "Network error. Please try again.");
+      setAiError(isEn ? "Network error. Please try again." : "네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setAiLoading(false);
     }
@@ -452,7 +468,7 @@ export default function SellerClient({
   const formatDateWithDay = (dateString: string) => {
     if (!dateString) return "-";
     const d = new Date(dateString);
-    const dLocale = locale === "ko" ? 'ko-KR' : 'en-US';
+    const dLocale = isEn ? 'en-US' : 'ko-KR';
     const datePart = d.toLocaleDateString(dLocale, { year: 'numeric', month: 'numeric', day: 'numeric' });
     const dayPart = d.toLocaleDateString(dLocale, { weekday: 'short' });
     return `${datePart} (${dayPart})`;
@@ -461,14 +477,35 @@ export default function SellerClient({
   const formatTime24And12 = (dateString: string) => {
     if (!dateString) return "-";
     const d = new Date(dateString);
-    const dLocale = locale === "ko" ? 'ko-KR' : 'en-US';
+    const dLocale = isEn ? 'en-US' : 'ko-KR';
     const time24 = d.toLocaleTimeString(dLocale, { hour12: false, hour: '2-digit', minute: '2-digit' });
     const time12 = d.toLocaleTimeString(dLocale, { hour12: true, hour: '2-digit', minute: '2-digit' });
     return `${time24} (${time12})`;
   };
 
+  // ── 헬퍼: buyer/member 표시 이름 (영문 환경이면 영문 우선) ──
+  const displayCompanyName = (entity: any) => {
+    if (!entity) return "-";
+    return (isEn && entity.companyNameEn) ? entity.companyNameEn : (entity.companyName || "-");
+  };
+
+  const displayName = (entity: any) => {
+    if (!entity) return "-";
+    return (isEn && entity.nameEn) ? entity.nameEn : (entity.name || "-");
+  };
+
+  const displayJobTitle = (entity: any) => {
+    if (!entity) return "";
+    return (isEn && entity.jobTitleEn) ? entity.jobTitleEn : (entity.jobTitle || "");
+  };
+
+  // ── 헬퍼: 현재 사용자 본인의 회사명/이름/직함 표시 ──
+  const myDisplayCompanyName = (isEn && user?.companyNameEn) ? user.companyNameEn : (user?.companyName || "");
+  const myDisplayName = (isEn && user?.nameEn) ? user.nameEn : (user?.name || "");
+  const myDisplayJobTitle = (isEn && user?.jobTitleEn) ? user.jobTitleEn : (user?.jobTitle || "");
+
   if (!mounted) return null;
-  if (!user) return <div className="p-10 text-center font-bold">{locale === "ko" ? "사용자 정보를 불러오는 중입니다..." : "Loading user info..."}</div>;
+  if (!user) return <div className="p-10 text-center font-bold">{isEn ? "Loading user info..." : "사용자 정보를 불러오는 중입니다..."}</div>;
 
   if (user.approvalStatus === "REJECTED") return <RejectedScreen user={user} />;
 
@@ -479,12 +516,14 @@ export default function SellerClient({
           <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <Clock className="w-8 h-8 md:w-10 md:h-10 animate-spin-slow" />
           </div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-800 mb-4">{locale === "ko" ? "가입 승인 대기 중" : "Awaiting Approval"}</h2>
+          <h2 className="text-xl md:text-2xl font-black text-slate-800 mb-4">{isEn ? "Awaiting Approval" : "가입 승인 대기 중"}</h2>
           <p className="text-slate-500 text-xs md:text-sm leading-relaxed mb-8">
-            {user.companyName}{locale === "ko" ? "의 마스터 계정 승인이 필요합니다." : " master account approval required."}<br/>
-            {locale === "ko" ? "승인 후 서비스를 이용하실 수 있습니다." : "You can use the service after approval."}
+            {myDisplayCompanyName}{isEn ? " master account approval required." : "의 마스터 계정 승인이 필요합니다."}<br/>
+            {isEn ? "You can use the service after approval." : "승인 후 서비스를 이용하실 수 있습니다."}
           </p>
-          <button onClick={() => window.location.reload()} className="text-blue-600 font-bold text-sm underline">{locale === "ko" ? "새로고침 (Refresh)" : "Refresh"}</button>
+          <button onClick={() => window.location.reload()} className="text-blue-600 font-bold text-sm underline">
+            {isEn ? "Refresh" : "새로고침 (Refresh)"}
+          </button>
         </div>
       </div>
     );
@@ -494,25 +533,25 @@ export default function SellerClient({
     const d = new Date(date);
     const h24 = d.getHours().toString().padStart(2, '0');
     const min = d.getMinutes().toString().padStart(2, '0');
-    const dLocale = locale === "ko" ? 'ko-KR' : 'en-US';
+    const dLocale = isEn ? 'en-US' : 'ko-KR';
     const ampm = d.toLocaleTimeString(dLocale, { hour: '2-digit', minute: '2-digit', hour12: true });
     return `${h24}:${min} (${ampm})`;
   };
 
   const downloadExcel = () => {
     if (confirmedMeetings.length === 0) {
-      alert(locale === "ko" ? "다운로드할 데이터가 없습니다." : "No data to download.");
+      alert(isEn ? "No data to download." : "다운로드할 데이터가 없습니다.");
       return;
     }
     const excelData = confirmedMeetings.map((m: any) => ({
-      "일자 (Date)": new Date(m.timeSlot.startTime).toLocaleDateString(),
-      "시간 (Time)": formatMeetingTime(new Date(m.timeSlot.startTime)),
-      "장소 (Location)": m.location || "미지정",
-      "상대 업체명 (Buyer)": m.buyer?.companyName || "-",
-      "담당자 (Name)": m.buyer?.name || "-",
-      "연락처 (Phone)": m.buyer?.phone || "-",
-      "이메일 (Email)": m.buyer?.email || "-",
-      "나의 제안 (Proposal)": m.proposal || "-",
+      "Date": new Date(m.timeSlot.startTime).toLocaleDateString(),
+      "Time": formatMeetingTime(new Date(m.timeSlot.startTime)),
+      "Location": m.location || (isEn ? "TBD" : "미지정"),
+      "Buyer": displayCompanyName(m.buyer),
+      "Contact": displayName(m.buyer),
+      "Phone": m.buyer?.phone || "-",
+      "Email": m.buyer?.email || "-",
+      "Proposal": m.proposal || "-",
     }));
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
@@ -522,8 +561,12 @@ export default function SellerClient({
 
   const onApply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const alertMsg = locale === "ko" ? "원페이저가 작성되지 않았습니다. 바이어가 기업 정보를 확인할 수 없어 거절될 확률이 높습니다. 그래도 신청하시겠습니까?" : "One-Pager is empty. Buyers may reject because of lack of info. Continue?";
-    const confirmMsg = locale === "ko" ? "이 바이어에게 미팅을 신청하시겠습니까?" : "Would you like to apply for a meeting with this buyer?";
+    const alertMsg = isEn
+      ? "One-Pager is empty. Buyers may reject because of lack of info. Continue?"
+      : "원페이저가 작성되지 않았습니다. 바이어가 기업 정보를 확인할 수 없어 거절될 확률이 높습니다. 그래도 신청하시겠습니까?";
+    const confirmMsg = isEn
+      ? "Would you like to apply for a meeting with this buyer?"
+      : "이 바이어에게 미팅을 신청하시겠습니까?";
     
     if (!isOnePagerCompleted) {
       if (!confirm(alertMsg)) return;
@@ -534,11 +577,11 @@ export default function SellerClient({
     setIsPending(true);
     try { 
       await applyMeetingAction(new FormData(e.currentTarget), sellerId); 
-      alert(locale === "ko" ? "✅ 신청 완료!" : "✅ Application Complete!"); 
+      alert(isEn ? "✅ Application Complete!" : "✅ 신청 완료!"); 
       setApplyingSlot(null); 
       setExpandedSection('pending');
     } catch(err) {
-      alert(locale === "ko" ? "신청 중 오류가 발생했습니다." : "Error occurred during application.");
+      alert(isEn ? "Error occurred during application." : "신청 중 오류가 발생했습니다.");
     } finally { 
       setIsPending(false); 
     }
@@ -547,18 +590,18 @@ export default function SellerClient({
   const handleProfileUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (editPassword.length > 0 && editPassword.length < 8) {
-      alert(locale === "ko" ? "비밀번호는 8자 이상이어야 합니다." : "Password must be at least 8 characters.");
+      alert(isEn ? "Password must be at least 8 characters." : "비밀번호는 8자 이상이어야 합니다.");
       return;
     }
     if (editPassword && editPassword !== editConfirmPassword) {
-      alert(locale === "ko" ? "비밀번호가 일치하지 않습니다." : "Passwords do not match.");
+      alert(isEn ? "Passwords do not match." : "비밀번호가 일치하지 않습니다.");
       return;
     }
     setIsPending(true);
     const res = await updateProfileAction(new FormData(e.currentTarget));
     setIsPending(false);
     if (res.success) {
-      alert(locale === "ko" ? "✅ 정보가 수정되었습니다." : "✅ Profile updated.");
+      alert(isEn ? "✅ Profile updated." : "✅ 정보가 수정되었습니다.");
       setEditPassword("");
       setEditConfirmPassword("");
     } else {
@@ -606,14 +649,17 @@ export default function SellerClient({
              <div className="flex items-center gap-3 w-full md:w-auto">
                 <div className="bg-white/20 p-2.5 rounded-full shrink-0"><Users size={18} className="text-white" /></div>
                 <span className="font-bold text-xs md:text-sm leading-snug">
-                  {locale === "ko" ? "조직 합류 대기 팀원" : "Members awaiting approval"} <span className="text-indigo-200 font-black">{pendingMembers.length}{locale === "ko" ? "명" : ""}</span>
+                  {isEn
+                    ? <>Members awaiting approval <span className="text-indigo-200 font-black">{pendingMembers.length}</span></>
+                    : <>조직 합류 대기 팀원 <span className="text-indigo-200 font-black">{pendingMembers.length}명</span></>
+                  }
                 </span>
              </div>
              <button 
                onClick={() => setExpandedSection('team')} 
                className="w-full md:w-auto bg-white text-indigo-600 px-5 py-3 md:py-2.5 rounded-[16px] text-[13px] font-black hover:bg-indigo-50 transition-colors shadow-sm"
              >
-               {locale === "ko" ? "검토 및 승인하기" : "Review & Approve"}
+               {isEn ? "Review & Approve" : "검토 및 승인하기"}
              </button>
           </div>
         )}
@@ -630,14 +676,14 @@ export default function SellerClient({
                     <Trophy size={22} className="animate-bounce" style={{ animationDuration: '2s' }} />
                   </div>
                   <h3 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">
-                    {t.seller.onePager.bannerTitle} <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">3.5{locale === "ko" ? "배" : "x"}</span> {t.seller.onePager.bannerSuffix}
+                    {t.seller.onePager.bannerTitle} <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">3.5{isEn ? "x" : "배"}</span> {t.seller.onePager.bannerSuffix}
                   </h3>
                 </div>
                 
                 <div className="space-y-2.5 bg-slate-50 p-4 md:p-5 rounded-2xl border border-slate-100">
                   <div className="flex justify-between text-xs md:text-sm font-black text-slate-600">
-                    <span className="flex items-center gap-1.5"><Target size={14}/> {locale === "ko" ? "프로필 셋업 현황" : "Profile Setup Status"}</span>
-                    <span className="text-indigo-600">50% {locale === "ko" ? "완료" : "Done"}</span>
+                    <span className="flex items-center gap-1.5"><Target size={14}/> {isEn ? "Profile Setup Status" : "프로필 셋업 현황"}</span>
+                    <span className="text-indigo-600">50% {isEn ? "Done" : "완료"}</span>
                   </div>
                   <div className="w-full h-3 md:h-3.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
                     <div className="w-1/2 h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full relative overflow-hidden">
@@ -645,15 +691,15 @@ export default function SellerClient({
                     </div>
                   </div>
                   <div className="flex justify-between text-[10px] md:text-[11px] font-bold text-slate-400 uppercase pt-1">
-                    <span>1. {locale === "ko" ? "회원가입 (완료)" : "Sign up (Done)"}</span>
-                    <span className="text-indigo-500">2. {locale === "ko" ? "원페이저 [저장 및 게시] 완료 대기중" : "One-Pager [Save & Post] pending"}</span>
+                    <span>1. {isEn ? "Sign up (Done)" : "회원가입 (완료)"}</span>
+                    <span className="text-indigo-500">2. {isEn ? "One-Pager [Save & Post] pending" : "원페이저 [저장 및 게시] 완료 대기중"}</span>
                   </div>
                 </div>
 
                 <p className="text-[13px] md:text-[15px] text-slate-500 font-bold leading-relaxed break-keep">
-                  {locale === "ko" 
-                    ? "바이어와 VC는 미팅을 수락하기 전, 반드시 기업의 원페이저(One-Pager)를 검토합니다. 핵심 KPI, 팀 소개, 비전을 매력적으로 어필하고 다른 기업들보다 먼저 미팅을 확정지으세요."
-                    : "Buyers and VCs review the One-Pager before accepting a meeting. Appeal your core KPI, team, and vision attractively to confirm meetings faster than others."
+                  {isEn 
+                    ? "Buyers and VCs review the One-Pager before accepting a meeting. Appeal your core KPI, team, and vision attractively to confirm meetings faster than others."
+                    : "바이어와 VC는 미팅을 수락하기 전, 반드시 기업의 원페이저(One-Pager)를 검토합니다. 핵심 KPI, 팀 소개, 비전을 매력적으로 어필하고 다른 기업들보다 먼저 미팅을 확정지으세요."
                   }
                 </p>
               </div>
@@ -661,8 +707,8 @@ export default function SellerClient({
               <Link href="/seller/one-pager" className="w-full md:w-[35%] shrink-0">
                 <div className="bg-slate-900 text-white p-5 md:p-6 rounded-[20px] md:rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-indigo-600 transition-all duration-300 shadow-xl hover:shadow-indigo-200/50 hover:-translate-y-1">
                   <Sparkles size={28} className="text-indigo-300 mb-1" />
-                  <span className="font-black text-base md:text-lg">{locale === "ko" ? "내 원페이저 작성하기" : "Create My One-Pager"}</span>
-                  <span className="text-[11px] md:text-xs text-indigo-200 font-bold flex items-center gap-1">{locale === "ko" ? "약 3분 소요" : "About 3 mins"} <ArrowRight size={12} /></span>
+                  <span className="font-black text-base md:text-lg">{isEn ? "Create My One-Pager" : "내 원페이저 작성하기"}</span>
+                  <span className="text-[11px] md:text-xs text-indigo-200 font-bold flex items-center gap-1">{isEn ? "About 3 mins" : "약 3분 소요"} <ArrowRight size={12} /></span>
                 </div>
               </Link>
             </div>
@@ -723,8 +769,9 @@ export default function SellerClient({
                     </div>
                     <div className="overflow-hidden">
                       <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                        {/* 영문 환경: 영문 회사명 + 영문 이름 / 한글 환경: 한글 회사명 + 한글 이름 */}
                         <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">
-                          [{user.companyName}] {user.name}{locale === "ko" ? " 님" : ""}
+                          [{myDisplayCompanyName}] {myDisplayName}{isEn ? "" : " 님"}
                         </h3>
                         {user.isMaster
                           ? <span className="w-fit px-2.5 py-1 bg-indigo-600 text-white text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1 shadow-md shadow-indigo-100"><ShieldCheck size={12}/> MASTER</span>
@@ -732,7 +779,7 @@ export default function SellerClient({
                         }
                       </div>
                       <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1 md:mt-2 uppercase tracking-widest truncate">
-                        {user.jobTitle} | Account Settings
+                        {myDisplayJobTitle} | Account Settings
                       </p>
                     </div>
                   </div>
@@ -743,15 +790,15 @@ export default function SellerClient({
                   {/* ── 개인정보 (마스터/멤버 공통) ── */}
                   <div>
                     <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-slate-100 pb-3">
-                      <UserIcon size={14}/> {locale === "ko" ? "개인 정보" : "Personal Info"}
+                      <UserIcon size={14}/> {isEn ? "Personal Info" : "개인 정보"}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
 
                       {/* 이메일 (고정) */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
-                          <Mail size={12}/> {locale === "ko" ? "로그인 이메일" : "Email"}
-                          <span className="text-rose-400 font-bold">*{locale === "ko" ? "수정불가" : "ReadOnly"}</span>
+                          <Mail size={12}/> {isEn ? "Email" : "로그인 이메일"}
+                          <span className="text-rose-400 font-bold">*{isEn ? "Read Only" : "수정불가"}</span>
                         </p>
                         <input defaultValue={user.email} disabled
                           className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm font-bold bg-slate-100 border-transparent text-slate-400 cursor-not-allowed"/>
@@ -761,7 +808,7 @@ export default function SellerClient({
                       {/* 성함 (한글) */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <UserIcon size={12}/> {locale === "ko" ? "성함 (한글)" : "Full Name"}
+                          <UserIcon size={12}/> {isEn ? "Full Name (KR)" : "성함 (한글)"}
                         </p>
                         <input name="name" defaultValue={user.name} required
                           className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
@@ -770,7 +817,7 @@ export default function SellerClient({
                       {/* 영문 이름 */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <UserIcon size={12}/> {locale === "ko" ? "영문 이름" : "Name (EN)"}
+                          <UserIcon size={12}/> {isEn ? "Full Name (EN)" : "영문 이름"}
                         </p>
                         <input name="nameEn" defaultValue={user.nameEn}
                           className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
@@ -779,7 +826,7 @@ export default function SellerClient({
                       {/* 연락처 */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <Phone size={12}/> {locale === "ko" ? "연락처" : "Phone"}
+                          <Phone size={12}/> {isEn ? "Phone" : "연락처"}
                         </p>
                         <input name="phone" value={editPhone} onChange={handleSellerPhoneChange}
                           maxLength={13} required
@@ -789,7 +836,7 @@ export default function SellerClient({
                       {/* 직함 (한글) */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <Check size={12}/> {locale === "ko" ? "직함 (한글)" : "Job Title"}
+                          <Check size={12}/> {isEn ? "Job Title (KR)" : "직함 (한글)"}
                         </p>
                         <input name="jobTitle" defaultValue={user.jobTitle} required
                           className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
@@ -798,7 +845,7 @@ export default function SellerClient({
                       {/* 직함 (영문) */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <Check size={12}/> {locale === "ko" ? "직함 (영문)" : "Job Title (EN)"}
+                          <Check size={12}/> {isEn ? "Job Title (EN)" : "직함 (영문)"}
                         </p>
                         <input name="jobTitleEn" defaultValue={user.jobTitleEn}
                           className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
@@ -807,7 +854,7 @@ export default function SellerClient({
                       {/* 새 비밀번호 */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                          {locale === "ko" ? "새 비밀번호" : "New Password"}
+                          {isEn ? "New Password" : "새 비밀번호"}
                         </p>
                         <input name="password" type="password" placeholder="8+ characters"
                           value={editPassword} onChange={e => setEditPassword(e.target.value)}
@@ -821,7 +868,7 @@ export default function SellerClient({
                       {/* 비밀번호 확인 */}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                          {locale === "ko" ? "비밀번호 확인" : "Confirm Password"}
+                          {isEn ? "Confirm Password" : "비밀번호 확인"}
                         </p>
                         <input name="confirmPassword" type="password" placeholder="Re-enter password"
                           value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)}
@@ -845,14 +892,14 @@ export default function SellerClient({
                       {/* 관심 파트너 */}
                       <div className="flex flex-col space-y-2 md:col-span-2">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
-                          <Handshake size={12}/> {locale === "ko" ? "관심 파트너 및 산업군" : "Preferred Partners & Industries"}
+                          <Handshake size={12}/> {isEn ? "Preferred Partners & Industries" : "관심 파트너 및 산업군"}
                           {!user.isMaster && (
-                            <span className="text-rose-400 font-bold">*{locale === "ko" ? "마스터 전용" : "Master Only"}</span>
+                            <span className="text-rose-400 font-bold">*{isEn ? "Master Only" : "마스터 전용"}</span>
                           )}
                         </p>
                         <textarea name="preferredPartners" defaultValue={user.preferredPartners || ""}
                           readOnly={!user.isMaster}
-                          placeholder={locale === "ko" ? "선호하는 파트너 조건이나 산업군" : "Preferred partner conditions or industries"}
+                          placeholder={isEn ? "Preferred partner conditions or industries" : "선호하는 파트너 조건이나 산업군"}
                           className={`w-full p-4 md:p-5 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all resize-none h-24 ${
                             user.isMaster
                               ? 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none'
@@ -863,16 +910,16 @@ export default function SellerClient({
                       {/* 회원 유형 */}
                       <div className="flex flex-col space-y-3 md:col-span-2 pt-2 border-t border-slate-100">
                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
-                          <Target size={12}/> {locale === "ko" ? "기업 분류" : "User Type"}
+                          <Target size={12}/> {isEn ? "User Type" : "기업 분류"}
                           {!user.isMaster && (
-                            <span className="text-rose-400 font-bold">*{locale === "ko" ? "마스터 전용" : "Master Only"}</span>
+                            <span className="text-rose-400 font-bold">*{isEn ? "Master Only" : "마스터 전용"}</span>
                           )}
                         </p>
                         <div className="flex gap-2 flex-wrap">
                           {["VC", "AC",
-                            locale === "ko" ? "바이어" : "Buyer",
-                            locale === "ko" ? "스타트업" : "Startup",
-                            locale === "ko" ? "기타" : "Other"
+                            isEn ? "Buyer" : "바이어",
+                            isEn ? "Startup" : "스타트업",
+                            isEn ? "Other" : "기타"
                           ].map((v) => (
                             <label key={v} className={`flex-1 min-w-[60px] text-center p-3 md:p-4 rounded-[16px] cursor-pointer text-xs md:text-sm font-black transition-all border ${
                               !user.isMaster ? "opacity-50 cursor-not-allowed" : ""
@@ -891,7 +938,7 @@ export default function SellerClient({
                         </div>
                         {(editSelectedType === "기타" || editSelectedType === "Other") && (
                           <input name="userTypeDetail" type="text"
-                            placeholder={locale === "ko" ? "상세 유형 입력" : "Enter type detail"}
+                            placeholder={isEn ? "Enter type detail" : "상세 유형 입력"}
                             required value={editUserTypeDetail}
                             onChange={(e) => { if (user.isMaster) setEditUserTypeDetail(e.target.value); }}
                             readOnly={!user.isMaster}
@@ -909,14 +956,14 @@ export default function SellerClient({
                   {user.isMaster && (
                     <div>
                       <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-indigo-50 pb-3">
-                        <Building2 size={14}/> {locale === "ko" ? "회사 공통 정보 (마스터 전용)" : "Company Info — Master Only"}
+                        <Building2 size={14}/> {isEn ? "Company Info — Master Only" : "회사 공통 정보 (마스터 전용)"}
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
 
                         {/* 회사명 한글 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "회사명 (한글)" : "Company (KR)"}
+                            {isEn ? "Company (KR)" : "회사명 (한글)"}
                           </p>
                           <input name="companyName" defaultValue={user.companyName} required
                             className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
@@ -925,7 +972,7 @@ export default function SellerClient({
                         {/* 회사명 영문 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "회사명 (영문)" : "Company (EN)"}
+                            {isEn ? "Company (EN)" : "회사명 (영문)"}
                           </p>
                           <input name="companyNameEn" defaultValue={user.companyNameEn}
                             className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
@@ -934,7 +981,7 @@ export default function SellerClient({
                         {/* 대표자 한글 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "대표자 (한글)" : "CEO (KR)"}
+                            {isEn ? "CEO (KR)" : "대표자 (한글)"}
                           </p>
                           <input name="ceoNameKo" defaultValue={user.ceoNameKo}
                             className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
@@ -943,7 +990,7 @@ export default function SellerClient({
                         {/* 대표자 영문 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "대표자 (영문)" : "CEO (EN)"}
+                            {isEn ? "CEO (EN)" : "대표자 (영문)"}
                           </p>
                           <input name="ceoNameEn" defaultValue={user.ceoNameEn}
                             className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
@@ -952,7 +999,7 @@ export default function SellerClient({
                         {/* 산업 분야 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "산업 분야" : "Industry Sector"}
+                            {isEn ? "Industry Sector" : "산업 분야"}
                           </p>
                           <input name="industrySector"
                             defaultValue={user.industrySector || user.onePager?.industrySector}
@@ -962,7 +1009,7 @@ export default function SellerClient({
                         {/* 설립연도 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "설립연도" : "Year Founded"}
+                            {isEn ? "Year Founded" : "설립연도"}
                           </p>
                           <input name="yearFounded"
                             defaultValue={user.yearFounded || user.onePager?.yearFounded}
@@ -973,7 +1020,7 @@ export default function SellerClient({
                         {/* 투자 단계 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "투자 단계" : "Investment Stage"}
+                            {isEn ? "Investment Stage" : "투자 단계"}
                           </p>
                           <input name="investmentStage"
                             defaultValue={user.investmentStage || user.onePager?.investmentStage}
@@ -984,7 +1031,7 @@ export default function SellerClient({
                         {/* 핵심 기술 */}
                         <div className="flex flex-col space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "핵심 기술" : "Primary Tech"}
+                            {isEn ? "Primary Tech" : "핵심 기술"}
                           </p>
                           <input name="primaryTech"
                             defaultValue={user.primaryTech || user.onePager?.primaryTech}
@@ -994,7 +1041,7 @@ export default function SellerClient({
                         {/* 사업자등록번호 */}
                         <div className="flex flex-col space-y-2 md:col-span-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {locale === "ko" ? "사업자등록번호" : "Business Number"}
+                            {isEn ? "Business Number" : "사업자등록번호"}
                           </p>
                           <input name="businessNumber" defaultValue={user.businessNumber || ""}
                             placeholder="000-00-00000"
@@ -1031,7 +1078,9 @@ export default function SellerClient({
                   {t.seller.team.title}
                   <span className="px-2 md:px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black rounded-md md:rounded-lg">Master Console</span>
                 </h3>
-                <p className="text-xs md:text-sm font-bold text-slate-400 mt-2 ml-1 leading-relaxed break-keep">{locale === "ko" ? "조직에 합류를 요청한 멤버를 승인하거나, 반려하여 수정을 요청할 수 있습니다." : "Approve or reject members requesting to join the organization."}</p>
+                <p className="text-xs md:text-sm font-bold text-slate-400 mt-2 ml-1 leading-relaxed break-keep">
+                  {isEn ? "Approve or reject members requesting to join the organization." : "조직에 합류를 요청한 멤버를 승인하거나, 반려하여 수정을 요청할 수 있습니다."}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 md:gap-12">
@@ -1052,17 +1101,20 @@ export default function SellerClient({
                       <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
                         <div className="flex items-center gap-3 md:gap-4 w-full sm:w-auto overflow-hidden">
                           <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-base md:text-lg">
-                            {m.name.charAt(0)}
+                            {(displayName(m)).charAt(0)}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-black text-sm text-slate-800 truncate">{m.name} <span className="text-indigo-500 ml-1 text-xs">({m.jobTitle})</span></p>
+                            {/* 팀원 이름: 영문 환경에서 영문 이름 우선 */}
+                            <p className="font-black text-sm text-slate-800 truncate">
+                              {displayName(m)} <span className="text-indigo-500 ml-1 text-xs">({displayJobTitle(m)})</span>
+                            </p>
                             <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.email}</p>
                           </div>
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
                           <button 
                             onClick={async () => { 
-                              const reason = window.prompt(locale === "ko" ? "거절 사유를 입력해주세요. (선택사항)" : "Please enter the rejection reason. (Optional)");
+                              const reason = window.prompt(isEn ? "Please enter the rejection reason. (Optional)" : "거절 사유를 입력해주세요. (선택사항)");
                               if (reason !== null) {
                                 setIsPending(true); 
                                 await handleMemberStatus(m.id, "REJECTED", reason); 
@@ -1094,18 +1146,18 @@ export default function SellerClient({
                           <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex flex-col justify-between gap-3 border border-rose-100 shadow-sm opacity-80 hover:opacity-100 transition-opacity">
                             <div className="flex items-center gap-3 md:gap-4 min-w-0">
                               <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 font-black text-base md:text-lg">
-                                {m.name.charAt(0)}
+                                {(displayName(m)).charAt(0)}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="font-black text-sm text-slate-800 flex items-center flex-wrap gap-1">
-                                  <span className="truncate max-w-[120px] md:max-w-full">{m.name}</span>
+                                  <span className="truncate max-w-[120px] md:max-w-full">{displayName(m)}</span>
                                 </p>
                                 <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.email}</p>
                               </div>
                             </div>
                             <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100/50">
                                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">{t.seller.team.rejectionReason}</p>
-                               <p className="text-[11px] font-bold text-rose-600 italic">"{m.rejectionReason || (locale === "ko" ? "사유 없음" : "No reason")}"</p>
+                               <p className="text-[11px] font-bold text-rose-600 italic">"{m.rejectionReason || (isEn ? "No reason" : "사유 없음")}"</p>
                             </div>
                           </div>
                         ))}
@@ -1125,21 +1177,24 @@ export default function SellerClient({
                     <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex items-center justify-between gap-3 border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-3 md:gap-4 min-w-0">
                         <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-black text-base md:text-lg ${m.id === user.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          {m.name.charAt(0)}
+                          {(displayName(m)).charAt(0)}
                         </div>
                         <div className="min-w-0">
                           <p className="font-black text-sm text-slate-800 flex items-center flex-wrap gap-1">
-                            <span className="truncate max-w-[120px] md:max-w-full">{m.name}</span>
+                            <span className="truncate max-w-[120px] md:max-w-full">{displayName(m)}</span>
                             {m.id === user.id && <span className="text-indigo-500 text-[9px] md:text-[10px] font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-md">(YOU)</span>}
                           </p>
-                          <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.jobTitle}</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{displayJobTitle(m)}</p>
                         </div>
                       </div>
                       
                       {m.id !== user.id && (
                         <button 
                           onClick={async () => { 
-                            if(confirm(locale === "ko" ? `[주의] ${m.name}님에게 마스터 권한을 넘기시겠습니까?\n권한을 위임하면 본인은 일반 조직원으로 강등됩니다.` : `Transfer master role to ${m.name}?`)) {
+                            if(confirm(isEn
+                              ? `[Warning] Transfer master role to ${displayName(m)}?\nYou will be demoted to a regular member.`
+                              : `[주의] ${displayName(m)}님에게 마스터 권한을 넘기시겠습니까?\n권한을 위임하면 본인은 일반 조직원으로 강등됩니다.`
+                            )) {
                               setIsPending(true);
                               await transferMasterRole(m.id);
                               setIsPending(false);
@@ -1167,14 +1222,14 @@ export default function SellerClient({
                   <div className="flex-1">
                     <p className="text-sm md:text-base font-black text-rose-900 flex items-center gap-2">
                       <AlertTriangle className="text-rose-500 md:hidden shrink-0" size={18} />
-                      {locale === "ko" ? "잠깐! 미팅을 신청하기 전에 원페이저를 꼭 작성해주세요." : "Wait! Please complete the One-Pager before applying."}
+                      {isEn ? "Wait! Please complete the One-Pager before applying." : "잠깐! 미팅을 신청하기 전에 원페이저를 꼭 작성해주세요."}
                     </p>
                     <p className="text-xs md:text-sm font-bold text-rose-700 mt-1.5 leading-relaxed break-keep">
-                      {locale === "ko" ? "바이어 측에 제공될 기업 정보가 없어, 신청하더라도 검토 없이 거절될 확률이 매우 높습니다. 소중한 매칭 기회를 놓치지 마세요." : "Without company info, rejection risk is very high. Don't miss the chance."}
+                      {isEn ? "Without company info, rejection risk is very high. Don't miss the chance." : "바이어 측에 제공될 기업 정보가 없어, 신청하더라도 검토 없이 거절될 확률이 매우 높습니다. 소중한 매칭 기회를 놓치지 마세요."}
                     </p>
                   </div>
                   <Link href="/seller/one-pager" className="w-full md:w-auto whitespace-nowrap px-6 py-3.5 bg-rose-500 text-white text-sm font-black rounded-[16px] hover:bg-rose-600 transition-colors shadow-md text-center">
-                    {locale === "ko" ? "지금 작성하기" : "Fill out now"}
+                    {isEn ? "Fill out now" : "지금 작성하기"}
                   </Link>
                 </div>
               )}
@@ -1217,7 +1272,7 @@ export default function SellerClient({
                       className="px-6 py-4 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 shadow-lg shadow-emerald-200"
                     >
                       {aiLoading ? <Clock className="animate-spin" size={16}/> : <Sparkles size={16}/>}
-                      <span className="hidden md:inline">{aiLoading ? (locale === "ko" ? "분석 중..." : "Analyzing...") : t.seller.available.aiSearch}</span>
+                      <span className="hidden md:inline">{aiLoading ? (isEn ? "Analyzing..." : "분석 중...") : t.seller.available.aiSearch}</span>
                     </button>
                   </div>
                   <p className="text-[11px] text-emerald-500 font-bold pl-1">{t.seller.available.aiHint}</p>
@@ -1233,11 +1288,18 @@ export default function SellerClient({
                     <div className="absolute inset-0 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
                   </div>
                   <div className="text-center space-y-1">
-                    <p className="text-sm font-black text-slate-700">{locale === "ko" ? "AI가 최적의 바이어/VC를 분석 중입니다..." : "AI is analyzing the best matches..."}</p>
-                    <p className="text-xs text-slate-400 font-bold">{locale === "ko" ? "DB 데이터 + 웹 검색을 종합하고 있어요" : "Synthesizing DB data + Web search"}</p>
+                    <p className="text-sm font-black text-slate-700">
+                      {isEn ? "AI is analyzing the best matches..." : "AI가 최적의 바이어/VC를 분석 중입니다..."}
+                    </p>
+                    <p className="text-xs text-slate-400 font-bold">
+                      {isEn ? "Synthesizing DB data + Web search" : "DB 데이터 + 웹 검색을 종합하고 있어요"}
+                    </p>
                   </div>
                   <div className="flex gap-2 flex-wrap justify-center">
-                    {["DB 분석", "웹 검색", "매칭 스코어 계산"].map((step, i) => (
+                    {(isEn
+                      ? ["DB Analysis", "Web Search", "Calculating Match Score"]
+                      : ["DB 분석", "웹 검색", "매칭 스코어 계산"]
+                    ).map((step, i) => (
                       <span key={step} className="px-3 py-1.5 bg-emerald-50 text-emerald-400 text-[10px] font-black rounded-full animate-pulse" style={{ animationDelay: `${i * 0.3}s` }}>
                         {step}
                       </span>
@@ -1274,11 +1336,21 @@ export default function SellerClient({
                     <table className="w-full text-left border-collapse min-w-[850px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100">
-                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">바이어 (Buyer)</th>
-                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">선호 파트너 (Interests)</th>
-                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">희망 일시 (Date & Time)</th>
-                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">장소 (Location)</th>
-                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">상태 / 액션</th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                            {isEn ? "Buyer" : "바이어 (Buyer)"}
+                          </th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                            {isEn ? "Interests" : "선호 파트너 (Interests)"}
+                          </th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                            {isEn ? "Date & Time" : "희망 일시 (Date & Time)"}
+                          </th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                            {isEn ? "Location" : "장소 (Location)"}
+                          </th>
+                          <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">
+                            {isEn ? "Action" : "상태 / 액션"}
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1295,19 +1367,23 @@ export default function SellerClient({
                                   </div>
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <h4 className="font-black text-sm text-slate-800 truncate">{slot.buyer?.companyName}</h4>
+                                      {/* 영문 환경: 영문 회사명 우선 */}
+                                      <h4 className="font-black text-sm text-slate-800 truncate">
+                                        {displayCompanyName(slot.buyer)}
+                                      </h4>
                                       <span className="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-md font-bold">{slot.buyer?.userType}</span>
                                     </div>
                                     <p className="text-[10px] text-slate-400 font-bold mt-1.5 truncate">
                                       <UserIcon size={10} className="inline mr-1" />
-                                      {slot.buyer?.name} {slot.buyer?.jobTitle && `(${slot.buyer.jobTitle})`}
+                                      {/* 영문 환경: 영문 이름/직함 우선 */}
+                                      {displayName(slot.buyer)}{displayJobTitle(slot.buyer) ? ` (${displayJobTitle(slot.buyer)})` : ""}
                                     </p>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-5 max-w-[280px]">
                                 <p className="text-xs text-slate-500 font-medium truncate italic">
-                                  "{slot.buyer?.preferredPartners || (locale === "ko" ? "전분야 협업 가능" : "Open to all industries")}"
+                                  "{slot.buyer?.preferredPartners || (isEn ? "Open to all industries" : "전분야 협업 가능")}"
                                 </p>
                               </td>
                               <td className="px-6 py-5">
@@ -1318,7 +1394,7 @@ export default function SellerClient({
                                 <div className="flex items-center gap-1.5">
                                   <MapPin size={14} className="text-rose-400 shrink-0"/>
                                   <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
-                                    {slot.location || (locale === "ko" ? "미지정 (운영팀 안내 예정)" : "TBD")}
+                                    {slot.location || (isEn ? "TBD" : "미지정 (운영팀 안내 예정)")}
                                   </span>
                                 </div>
                               </td>
@@ -1380,9 +1456,12 @@ export default function SellerClient({
                              <Building2 size={20}/>
                            </div>
                            <div className="min-w-0">
-                             <h4 className="font-black text-slate-800 text-base md:text-lg truncate">{m.buyer?.companyName}</h4>
+                             {/* 영문 환경: 영문 회사명 우선 */}
+                             <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
+                               {displayCompanyName(m.buyer)}
+                             </h4>
                              <p className="text-[11px] font-bold text-slate-500 mt-0.5 flex items-center gap-1 truncate">
-                               <UserIcon size={12}/> {m.buyer?.name || "-"}
+                               <UserIcon size={12}/> {displayName(m.buyer) || "-"}
                              </p>
                            </div>
                          </div>
@@ -1394,7 +1473,7 @@ export default function SellerClient({
                        <div className="p-5 flex-1 flex flex-col gap-4">
                          <div className="space-y-1.5">
                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                             <Calendar size={12}/> {locale === "ko" ? "신청 일정" : "Applied Schedule"}
+                             <Calendar size={12}/> {isEn ? "Applied Schedule" : "신청 일정"}
                            </p>
                            <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
                            <p className="text-xs font-bold text-slate-500">{formatTime24And12(m.timeSlot?.startTime)}</p>
@@ -1442,9 +1521,12 @@ export default function SellerClient({
                             <Building2 size={24}/>
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-black text-slate-800 text-lg md:text-xl truncate">{m.buyer?.companyName}</h4>
+                            {/* 영문 환경: 영문 회사명 우선 */}
+                            <h4 className="font-black text-slate-800 text-lg md:text-xl truncate">
+                              {displayCompanyName(m.buyer)}
+                            </h4>
                             <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1 truncate">
-                              <UserIcon size={12}/> {m.buyer?.name}
+                              <UserIcon size={12}/> {displayName(m.buyer)}
                             </p>
                           </div>
                         </div>
@@ -1466,7 +1548,7 @@ export default function SellerClient({
                           </div>
                           <div className="flex items-center gap-2 text-slate-700 pt-2 mt-2 border-t border-slate-100">
                             <MapPin size={16} className="text-rose-400" />
-                            <span className="text-sm font-bold">{m.location || (locale === "ko" ? "미지정 (운영팀 안내 예정)" : "TBD")}</span>
+                            <span className="text-sm font-bold">{m.location || (isEn ? "TBD" : "미지정 (운영팀 안내 예정)")}</span>
                           </div>
                         </div>
                       </div>
@@ -1502,7 +1584,10 @@ export default function SellerClient({
                             <Building2 size={20}/>
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-black text-slate-800 text-base md:text-lg truncate">{m.buyer?.companyName}</h4>
+                            {/* 영문 환경: 영문 회사명 우선 */}
+                            <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
+                              {displayCompanyName(m.buyer)}
+                            </h4>
                           </div>
                         </div>
                         <span className="px-2.5 py-1 bg-rose-100 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0 ml-2">REJECTED</span>
@@ -1510,11 +1595,15 @@ export default function SellerClient({
                       
                       <div className="p-5 flex-1 flex flex-col gap-4">
                         <div className="space-y-1.5">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Calendar size={12}/> Schedule</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Calendar size={12}/> {isEn ? "Schedule" : "일정"}
+                          </p>
                           <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
                         </div>
                         <div className="mt-auto pt-4 border-t border-slate-100">
-                          <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><AlertCircle size={12}/> {t.seller.rejected.reason}</p>
+                          <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                            <AlertCircle size={12}/> {t.seller.rejected.reason}
+                          </p>
                           <div className="bg-rose-50/50 text-rose-700 text-[13px] font-semibold p-4 rounded-[16px] leading-relaxed italic border border-rose-100/50 break-keep">
                             "{m.rejectionReason || t.seller.rejected.noReason}"
                           </div>
@@ -1551,7 +1640,10 @@ export default function SellerClient({
                   <Building2 size={24}/>
                 </div>
                 <div>
-                  <h4 className="text-lg font-black text-slate-900 mb-1">{applyingSlot.buyer?.companyName}</h4>
+                  {/* 영문 환경: 영문 회사명 우선 */}
+                  <h4 className="text-lg font-black text-slate-900 mb-1">
+                    {displayCompanyName(applyingSlot.buyer)}
+                  </h4>
                   <p className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md inline-flex">{applyingSlot.buyer?.userType}</p>
                   <div className="mt-3 pt-3 border-t border-slate-200/60">
                     <p className="text-sm font-bold text-slate-700">{formatDateWithDay(applyingSlot.startTime)}</p>
