@@ -1,6 +1,6 @@
 "use client";
 import AiSearchResultCard from "@/components/AiSearchResultCard";
-import { useI18n } from "@/lib/i18n"; // [1] i18n 추가
+import { useI18n } from "@/lib/i18n";
 import { isCompanyMatch } from "@/lib/matchUtils";
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -28,7 +28,7 @@ import * as XLSX from 'xlsx';
 // ---------------------------------------------------------------------------
 
 function RejectedScreen({ user }: { user: any }) {
-  const { t, locale } = useI18n(); // 다국어 훅
+  const { t, locale } = useI18n();
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState("");
@@ -306,15 +306,38 @@ export default function SellerClient({
   approvedMembers = [],
   rejectedTeamMembers = [] 
 }: any) {
-  const { t, locale } = useI18n(); // 다국어 훅 추가
+  const { t, locale } = useI18n();
+  const isEn = locale === "en";
+
   const [isPending, setIsPending] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('available');
   const [confirmedSort, setConfirmedSort] = useState("asc");
   const [applyingSlot, setApplyingSlot] = useState<any>(null);
 
-  const [selectedType, setSelectedType] = useState(user?.userType || "스타트업");
-  const [userTypeDetail, setUserTypeDetail] = useState(user?.userTypeDetail || "");
+  // ── 프로필 편집 state ──
+  const [editSelectedType, setEditSelectedType] = useState(
+    ["VC", "AC", "바이어", "스타트업", "기타"].includes(user?.userType)
+      ? user?.userType
+      : (user?.userType ? "기타" : "스타트업")
+  );
+  const [editUserTypeDetail, setEditUserTypeDetail] = useState(
+    !["VC", "AC", "바이어", "스타트업"].includes(user?.userType) && user?.userType
+      ? user.userType
+      : ""
+  );
+  const [editPassword, setEditPassword] = useState("");
+  const [editConfirmPassword, setEditConfirmPassword] = useState("");
+  const [editPhone, setEditPhone] = useState(user?.phone || "");
+
+  const handleSellerPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, "");
+    let formatted = value;
+    if (value.length <= 3) formatted = value;
+    else if (value.length <= 7) formatted = `${value.slice(0, 3)}-${value.slice(3)}`;
+    else formatted = `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7, 11)}`;
+    setEditPhone(formatted);
+  };
 
   const [seenCounts, setSeenCounts] = useState({
     available: 0,
@@ -523,11 +546,24 @@ export default function SellerClient({
 
   const handleProfileUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (editPassword.length > 0 && editPassword.length < 8) {
+      alert(locale === "ko" ? "비밀번호는 8자 이상이어야 합니다." : "Password must be at least 8 characters.");
+      return;
+    }
+    if (editPassword && editPassword !== editConfirmPassword) {
+      alert(locale === "ko" ? "비밀번호가 일치하지 않습니다." : "Passwords do not match.");
+      return;
+    }
     setIsPending(true);
     const res = await updateProfileAction(new FormData(e.currentTarget));
     setIsPending(false);
-    if (res.success) alert(locale === "ko" ? "✅ 정보가 수정되었습니다." : "✅ Profile updated.");
-    else alert(res.error || "Update failed");
+    if (res.success) {
+      alert(locale === "ko" ? "✅ 정보가 수정되었습니다." : "✅ Profile updated.");
+      setEditPassword("");
+      setEditConfirmPassword("");
+    } else {
+      alert(res.error || "Update failed");
+    }
   };
 
   const navItems: any[] = [
@@ -674,160 +710,319 @@ export default function SellerClient({
 
         <main className="min-h-[500px]">
 
-          {/* 🚀 [프로필 수정 영역] */}
+          {/* ── [프로필 수정] ── */}
           {expandedSection === 'profile' && (
-            <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left max-w-5xl mx-auto">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
-                <div className="flex items-center gap-4 w-full">
-                  <div className="w-14 h-14 md:w-16 md:h-16 shrink-0 bg-slate-900 rounded-[18px] md:rounded-3xl flex items-center justify-center text-white shadow-xl">
-                    <UserIcon size={28}/>
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                       <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">[{user.companyName}] {user.name}</h3>
-                       {user.isMaster ? (
-                         <span className="w-fit px-2.5 py-1 bg-indigo-600 text-white text-[9px] md:text-[10px] font-black rounded-md md:rounded-lg flex items-center gap-1 shadow-md shadow-indigo-100"><ShieldCheck size={12}/> {t.seller.profile.masterBadge}</span>
-                       ) : (
-                         <span className="w-fit px-2.5 py-1 bg-slate-100 text-slate-500 text-[9px] md:text-[10px] font-black rounded-md md:rounded-lg flex items-center gap-1"><Users size={12}/> {t.seller.profile.memberBadge}</span>
-                       )}
+            <section className="animate-in fade-in slide-in-from-bottom-4 px-1 md:px-0">
+              <div className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white">
+
+                {/* 헤더 */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-10 border-b border-slate-100 pb-6 md:pb-8">
+                  <div className="flex items-center gap-4 w-full">
+                    <div className="w-14 h-14 md:w-16 md:h-16 shrink-0 bg-slate-900 rounded-[18px] md:rounded-3xl flex items-center justify-center text-white shadow-xl">
+                      <UserIcon size={28}/>
                     </div>
-                    <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1 md:mt-2 uppercase tracking-widest truncate">{user.jobTitle} | Account Settings</p>
+                    <div className="overflow-hidden">
+                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                        <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">
+                          [{user.companyName}] {user.name}{locale === "ko" ? " 님" : ""}
+                        </h3>
+                        {user.isMaster
+                          ? <span className="w-fit px-2.5 py-1 bg-indigo-600 text-white text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1 shadow-md shadow-indigo-100"><ShieldCheck size={12}/> MASTER</span>
+                          : <span className="w-fit px-2.5 py-1 bg-slate-100 text-slate-500 text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1"><Users size={12}/> MEMBER</span>
+                        }
+                      </div>
+                      <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1 md:mt-2 uppercase tracking-widest truncate">
+                        {user.jobTitle} | Account Settings
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <form onSubmit={handleProfileUpdate} className="flex flex-col md:grid md:grid-cols-2 gap-6 md:gap-8">
-                
-                <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Mail size={12}/> {locale === "ko" ? "로그인 이메일 (Email)" : "Email"} <span className="text-rose-400 ml-1 font-bold">*{locale === "ko" ? "수정 불가" : "ReadOnly"}</span>
-                  </p>
-                  <input name="email" defaultValue={user.email} readOnly className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold bg-slate-100 border-transparent text-slate-500 cursor-not-allowed outline-none" />
-                </div>
+                <form onSubmit={handleProfileUpdate} className="space-y-10">
 
-                <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <FileText size={12}/> {locale === "ko" ? "사업자등록번호 (Business Number)" : "Business Number"} {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*{t.seller.profile.masterOnly}</span>}
-                  </p>
-                  <input 
-                    name="businessNumber" 
-                    defaultValue={user.businessNumber || ""} 
-                    readOnly={!user.isMaster} 
-                    placeholder={locale === "ko" ? "사업자등록번호 (숫자만)" : "Business Number (Digits only)"} 
-                    className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
-                  />
-                </div>
+                  {/* ── 개인정보 (마스터/멤버 공통) ── */}
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-slate-100 pb-3">
+                      <UserIcon size={14}/> {locale === "ko" ? "개인 정보" : "Personal Info"}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
 
-                <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Building2 size={12}/> {locale === "ko" ? "회사명 (Company)" : "Company Name"} {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*{t.seller.profile.masterOnly}</span>}
-                  </p>
-                  <input 
-                    name="companyName" 
-                    defaultValue={user.companyName} 
-                    readOnly={!user.isMaster} 
-                    className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
-                  />
-                </div>
+                      {/* 이메일 (고정) */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+                          <Mail size={12}/> {locale === "ko" ? "로그인 이메일" : "Email"}
+                          <span className="text-rose-400 font-bold">*{locale === "ko" ? "수정불가" : "ReadOnly"}</span>
+                        </p>
+                        <input defaultValue={user.email} disabled
+                          className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm font-bold bg-slate-100 border-transparent text-slate-400 cursor-not-allowed"/>
+                        <input type="hidden" name="email" value={user.email}/>
+                      </div>
 
-                <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Target size={12}/> {locale === "ko" ? "기업 분류 (User Type)" : "User Type"} {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*{t.seller.profile.masterOnly}</span>}
-                  </p>
-                  <div className="flex gap-2 flex-wrap mt-1">
-                    {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
-                      <label key={v} className={`flex-1 min-w-[80px] text-center p-3.5 border rounded-[16px] md:rounded-2xl cursor-pointer text-xs font-black transition-all ${!user.isMaster ? "opacity-60 cursor-not-allowed" : ""} ${selectedType === v ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100" : "bg-white text-slate-400 border-slate-200 hover:bg-slate-50"}`}>
-                        <input 
-                          type="radio" 
-                          name="userType" 
-                          value={v} 
-                          className="hidden" 
-                          checked={selectedType === v} 
-                          onChange={(e) => {
-                            if (user.isMaster) setSelectedType(e.target.value);
-                          }} 
-                          disabled={!user.isMaster}
-                        />
-                        {v}
-                      </label>
-                    ))}
+                      {/* 성함 (한글) */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <UserIcon size={12}/> {locale === "ko" ? "성함 (한글)" : "Full Name"}
+                        </p>
+                        <input name="name" defaultValue={user.name} required
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 영문 이름 */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <UserIcon size={12}/> {locale === "ko" ? "영문 이름" : "Name (EN)"}
+                        </p>
+                        <input name="nameEn" defaultValue={user.nameEn}
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 연락처 */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Phone size={12}/> {locale === "ko" ? "연락처" : "Phone"}
+                        </p>
+                        <input name="phone" value={editPhone} onChange={handleSellerPhoneChange}
+                          maxLength={13} required
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 직함 (한글) */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Check size={12}/> {locale === "ko" ? "직함 (한글)" : "Job Title"}
+                        </p>
+                        <input name="jobTitle" defaultValue={user.jobTitle} required
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 직함 (영문) */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Check size={12}/> {locale === "ko" ? "직함 (영문)" : "Job Title (EN)"}
+                        </p>
+                        <input name="jobTitleEn" defaultValue={user.jobTitleEn}
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 새 비밀번호 */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                          {locale === "ko" ? "새 비밀번호" : "New Password"}
+                        </p>
+                        <input name="password" type="password" placeholder="8+ characters"
+                          value={editPassword} onChange={e => setEditPassword(e.target.value)}
+                          className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${
+                            editPassword.length > 0 && editPassword.length < 8
+                              ? 'border-rose-400 focus:border-rose-500'
+                              : 'border-transparent focus:bg-white focus:border-indigo-500'
+                          }`}/>
+                      </div>
+
+                      {/* 비밀번호 확인 */}
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                          {locale === "ko" ? "비밀번호 확인" : "Confirm Password"}
+                        </p>
+                        <input name="confirmPassword" type="password" placeholder="Re-enter password"
+                          value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)}
+                          className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${
+                            editConfirmPassword && editPassword !== editConfirmPassword
+                              ? 'border-rose-500 bg-rose-50'
+                              : 'border-transparent focus:bg-white focus:border-indigo-500'
+                          }`}/>
+                      </div>
+
+                      {/* LinkedIn */}
+                      <div className="flex flex-col space-y-2 md:col-span-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Globe size={12}/> LinkedIn
+                        </p>
+                        <input name="linkedinUrl" defaultValue={user.linkedinUrl}
+                          placeholder="https://linkedin.com/in/..."
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      </div>
+
+                      {/* 관심 파트너 */}
+                      <div className="flex flex-col space-y-2 md:col-span-2">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+                          <Handshake size={12}/> {locale === "ko" ? "관심 파트너 및 산업군" : "Preferred Partners & Industries"}
+                          {!user.isMaster && (
+                            <span className="text-rose-400 font-bold">*{locale === "ko" ? "마스터 전용" : "Master Only"}</span>
+                          )}
+                        </p>
+                        <textarea name="preferredPartners" defaultValue={user.preferredPartners || ""}
+                          readOnly={!user.isMaster}
+                          placeholder={locale === "ko" ? "선호하는 파트너 조건이나 산업군" : "Preferred partner conditions or industries"}
+                          className={`w-full p-4 md:p-5 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all resize-none h-24 ${
+                            user.isMaster
+                              ? 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none'
+                              : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'
+                          }`}/>
+                      </div>
+
+                      {/* 회원 유형 */}
+                      <div className="flex flex-col space-y-3 md:col-span-2 pt-2 border-t border-slate-100">
+                        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+                          <Target size={12}/> {locale === "ko" ? "기업 분류" : "User Type"}
+                          {!user.isMaster && (
+                            <span className="text-rose-400 font-bold">*{locale === "ko" ? "마스터 전용" : "Master Only"}</span>
+                          )}
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          {["VC", "AC",
+                            locale === "ko" ? "바이어" : "Buyer",
+                            locale === "ko" ? "스타트업" : "Startup",
+                            locale === "ko" ? "기타" : "Other"
+                          ].map((v) => (
+                            <label key={v} className={`flex-1 min-w-[60px] text-center p-3 md:p-4 rounded-[16px] cursor-pointer text-xs md:text-sm font-black transition-all border ${
+                              !user.isMaster ? "opacity-50 cursor-not-allowed" : ""
+                            } ${
+                              editSelectedType === v
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
+                                : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"
+                            }`}>
+                              <input type="radio" name="userType" value={v} className="hidden"
+                                checked={editSelectedType === v}
+                                onChange={(e) => { if (user.isMaster) setEditSelectedType(e.target.value); }}
+                                disabled={!user.isMaster}/>
+                              {v}
+                            </label>
+                          ))}
+                        </div>
+                        {(editSelectedType === "기타" || editSelectedType === "Other") && (
+                          <input name="userTypeDetail" type="text"
+                            placeholder={locale === "ko" ? "상세 유형 입력" : "Enter type detail"}
+                            required value={editUserTypeDetail}
+                            onChange={(e) => { if (user.isMaster) setEditUserTypeDetail(e.target.value); }}
+                            readOnly={!user.isMaster}
+                            className={`w-full p-4 mt-2 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${
+                              user.isMaster
+                                ? 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none'
+                                : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'
+                            }`}/>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {selectedType === "기타" && (
-                    <input 
-                      name="userTypeDetail" 
-                      type="text" 
-                      placeholder={locale === "ko" ? "상세 유형 입력" : "Enter type detail"} 
-                      required 
-                      value={userTypeDetail} 
-                      onChange={(e) => {
-                        if (user.isMaster) setUserTypeDetail(e.target.value);
-                      }} 
-                      readOnly={!user.isMaster}
-                      className={`w-full p-3.5 md:p-4 mt-2 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
-                    />
+
+                  {/* ── 마스터 전용: 회사 공통 정보 ── */}
+                  {user.isMaster && (
+                    <div>
+                      <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-indigo-50 pb-3">
+                        <Building2 size={14}/> {locale === "ko" ? "회사 공통 정보 (마스터 전용)" : "Company Info — Master Only"}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+
+                        {/* 회사명 한글 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "회사명 (한글)" : "Company (KR)"}
+                          </p>
+                          <input name="companyName" defaultValue={user.companyName} required
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 회사명 영문 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "회사명 (영문)" : "Company (EN)"}
+                          </p>
+                          <input name="companyNameEn" defaultValue={user.companyNameEn}
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 대표자 한글 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "대표자 (한글)" : "CEO (KR)"}
+                          </p>
+                          <input name="ceoNameKo" defaultValue={user.ceoNameKo}
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 대표자 영문 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "대표자 (영문)" : "CEO (EN)"}
+                          </p>
+                          <input name="ceoNameEn" defaultValue={user.ceoNameEn}
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 산업 분야 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "산업 분야" : "Industry Sector"}
+                          </p>
+                          <input name="industrySector"
+                            defaultValue={user.industrySector || user.onePager?.industrySector}
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 설립연도 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "설립연도" : "Year Founded"}
+                          </p>
+                          <input name="yearFounded"
+                            defaultValue={user.yearFounded || user.onePager?.yearFounded}
+                            placeholder="e.g. 2020"
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 투자 단계 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "투자 단계" : "Investment Stage"}
+                          </p>
+                          <input name="investmentStage"
+                            defaultValue={user.investmentStage || user.onePager?.investmentStage}
+                            placeholder="e.g. Series A"
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 핵심 기술 */}
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "핵심 기술" : "Primary Tech"}
+                          </p>
+                          <input name="primaryTech"
+                            defaultValue={user.primaryTech || user.onePager?.primaryTech}
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+
+                        {/* 사업자등록번호 */}
+                        <div className="flex flex-col space-y-2 md:col-span-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {locale === "ko" ? "사업자등록번호" : "Business Number"}
+                          </p>
+                          <input name="businessNumber" defaultValue={user.businessNumber || ""}
+                            placeholder="000-00-00000"
+                            className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </div>
 
-                <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Handshake size={12}/> {locale === "ko" ? "관심 파트너 및 산업군 (Interests)" : "Preferred Partners & Industries"} {!user.isMaster && <span className="text-rose-400 ml-1 font-bold">*{t.seller.profile.masterOnly}</span>}
-                  </p>
-                  <textarea 
-                    name="preferredPartners" 
-                    defaultValue={user.preferredPartners || ""} 
-                    readOnly={!user.isMaster} 
-                    placeholder={locale === "ko" ? "선호하는 파트너 조건이나 산업군" : "Preferred partner conditions or industries"} 
-                    className={`w-full p-4 md:p-5 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all resize-none h-24 ${user.isMaster ? 'bg-white border-slate-200 focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed outline-none'}`} 
-                  />
-                </div>
-
-                <div className="col-span-2 my-2 border-t border-slate-100"></div>
-
-                <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <UserIcon size={12}/> {locale === "ko" ? "가입자 성함 (Name)" : "Full Name"}
-                  </p>
-                  <input 
-                    name="name" 
-                    defaultValue={user.name} 
-                    required 
-                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
-                  />
-                </div>
-
-                <div className="flex flex-col space-y-2 w-full">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Phone size={12}/> {locale === "ko" ? "연락처 (Phone)" : "Phone"}
-                  </p>
-                  <input 
-                    name="phone" 
-                    defaultValue={user.phone} 
-                    required 
-                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
-                  />
-                </div>
-                
-                <div className="flex flex-col space-y-2 w-full md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Check size={12}/> {locale === "ko" ? "직함 (Job Title)" : "Job Title"}
-                  </p>
-                  <input 
-                    name="jobTitle" 
-                    defaultValue={user.jobTitle} 
-                    required 
-                    className="w-full p-3.5 md:p-4 bg-white border-slate-200 focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all" 
-                  />
-                </div>
-
-                <button type="submit" disabled={isPending} className="w-full md:col-span-2 py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl mt-4">
-                  {isPending ? <Clock className="animate-spin" size={20}/> : <Save size={20}/>}
-                  <span>{t.seller.profile.saveBtn}</span>
-                </button>
-              </form>
+                  {/* 저장 버튼 */}
+                  <button
+                    type="submit"
+                    disabled={
+                      isPending ||
+                      (editPassword.length > 0 && editPassword !== editConfirmPassword) ||
+                      (editPassword.length > 0 && editPassword.length < 8)
+                    }
+                    className="w-full py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 shadow-xl mt-2 disabled:opacity-50 disabled:hover:bg-slate-900"
+                  >
+                    {isPending ? <Clock className="animate-spin" size={20}/> : <Save size={20}/>}
+                    {t.seller.profile.saveBtn}
+                  </button>
+                </form>
+              </div>
             </section>
           )}
 
-          {/* 🚀 [팀 관리 영역] */}
+          {/* ── [팀 관리] ── */}
           {expandedSection === 'team' && user.isMaster && (
             <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left w-full">
               <div className="flex flex-col mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
@@ -842,7 +1037,6 @@ export default function SellerClient({
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 md:gap-12">
                 <div className="space-y-4">
                   
-                  {/* 대기 멤버 */}
                   <div className="flex items-center justify-between mb-4 md:mb-6">
                     <p className="text-[11px] md:text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                       <Clock size={16}/> {t.seller.team.pendingTitle} <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md">{pendingMembers.length}</span>
@@ -887,7 +1081,6 @@ export default function SellerClient({
                     ))
                   )}
 
-                  {/* 반려(거절)된 멤버 리스트 영역 */}
                   {rejectedTeamMembers.length > 0 && (
                     <div className="mt-8 pt-8 border-t border-slate-100">
                       <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -962,7 +1155,7 @@ export default function SellerClient({
             </section>
           )}
 
-          {/* 🚀 [A] 매칭 탐색 (AVAILABLE) */}
+          {/* ── [A] 매칭 탐색 (AVAILABLE) ── */}
           {expandedSection === 'available' && (
             <section className="animate-in fade-in slide-in-from-bottom-4 space-y-6 md:space-y-10 px-1 md:px-2">
               
@@ -1053,27 +1246,27 @@ export default function SellerClient({
                 </div>
               )}
 
-{aiSearchMode && !aiLoading && aiSearched && (
-  <AiSearchResultCard
-    results={aiResults}
-    query={aiQuery}
-    isFallback={aiIsFallback}
-    error={aiError}
-    locale={locale}
-    isMatched={(companyName) =>
-      availableSlots.some((slot: any) =>
-        isCompanyMatch(slot.buyer?.companyName || "", companyName)
-      )
-    }
-    onViewOnePager={(companyName) => {
-      const matched = availableSlots.find((slot: any) =>
-        isCompanyMatch(slot.buyer?.companyName || "", companyName)
-      );
-      if (matched) setApplyingSlot(matched);
-    }}
-    onePagerLabel={t.seller.available.applyBtn}
-  />
-)}
+              {aiSearchMode && !aiLoading && aiSearched && (
+                <AiSearchResultCard
+                  results={aiResults}
+                  query={aiQuery}
+                  isFallback={aiIsFallback}
+                  error={aiError}
+                  locale={locale}
+                  isMatched={(companyName) =>
+                    availableSlots.some((slot: any) =>
+                      isCompanyMatch(slot.buyer?.companyName || "", companyName)
+                    )
+                  }
+                  onViewOnePager={(companyName) => {
+                    const matched = availableSlots.find((slot: any) =>
+                      isCompanyMatch(slot.buyer?.companyName || "", companyName)
+                    );
+                    if (matched) setApplyingSlot(matched);
+                  }}
+                  onePagerLabel={t.seller.available.applyBtn}
+                />
+              )}
 
               {!aiSearchMode && (
                 <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
@@ -1162,7 +1355,7 @@ export default function SellerClient({
             </section>
           )}
 
-          {/* 🚀 [B] 신청 현황 (PENDING) */}
+          {/* ── [B] 신청 현황 (PENDING) ── */}
           {expandedSection === 'pending' && (
              <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
                <div>
@@ -1219,7 +1412,7 @@ export default function SellerClient({
              </section>
           )}
 
-          {/* 🚀 [C] 확정 일정 (CONFIRMED) */}
+          {/* ── [C] 확정 일정 (CONFIRMED) ── */}
           {expandedSection === 'confirmed' && (
             <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-0 border-b border-slate-200/50 pb-4 md:border-none md:pb-0">
@@ -1284,7 +1477,7 @@ export default function SellerClient({
             </section>
           )}
 
-          {/* 🚀 거절 내역(REJECTED) */}
+          {/* ── [D] 거절 내역 (REJECTED) ── */}
           {expandedSection === 'rejected' && (
             <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
               <div className="border-b border-slate-200/50 pb-4 md:border-none md:pb-0">
@@ -1337,7 +1530,7 @@ export default function SellerClient({
         </main>
       </div>
 
-      {/* 🚀 --- 미팅 신청 모달 --- */}
+      {/* ── 미팅 신청 모달 ── */}
       {applyingSlot && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in zoom-in-95">
           <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border border-white/20">

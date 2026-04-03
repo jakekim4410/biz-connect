@@ -1,6 +1,6 @@
 "use client";
 import AiSearchResultCard from "@/components/AiSearchResultCard";
-import { useI18n } from "@/lib/i18n"; // i18n 훅 임포트
+import { useI18n } from "@/lib/i18n";
 import { isCompanyMatch } from "@/lib/matchUtils";
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -18,13 +18,53 @@ import {
   BarChart3, ChevronRight, PieChart, UserCheck, Save, User as UserIcon, Calendar, Settings, Handshake, Globe, Award,
   CheckCircle2, AlertCircle, Info, Rocket, Bell, Check, XCircle, FileSearch, ArrowRight, Activity, Zap,
   Users, ShieldCheck, Edit2, Trash2, Inbox,
-  LayoutList, LayoutGrid
+  LayoutList, LayoutGrid, ExternalLink
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import React from "react";
 
+// ─── Industry 한↔영 매핑 테이블 ───
+const INDUSTRY_CATEGORIES_KO = [
+  "인공지능 (AI & Big Data)",
+  "핀테크 (Fintech)",
+  "바이오/헬스케어 (Bio & Healthcare)",
+  "이커머스/물류 (E-commerce & Logistics)",
+  "에듀테크 (Edtech)",
+  "모빌리티/자율주행 (Mobility & Auto)",
+  "프롭테크/부동산 (Proptech)",
+  "SaaS/B2B 솔루션 (SaaS & B2B)",
+  "ESG/클린테크 (ESG & Cleantech)",
+  "로보틱스/딥테크 (Robotics & Deeptech)",
+  "콘텐츠/엔터테인먼트 (Content & Entertainment)",
+  "기타 (Others)",
+];
+const INDUSTRY_CATEGORIES_EN = [
+  "AI & Big Data",
+  "Fintech",
+  "Bio & Healthcare",
+  "E-commerce & Logistics",
+  "Edtech",
+  "Mobility & Autonomous Driving",
+  "Proptech & Real Estate",
+  "SaaS & B2B Solutions",
+  "ESG & Cleantech",
+  "Robotics & Deeptech",
+  "Content & Entertainment",
+  "Others",
+];
+
+/** "에듀테크 (Edtech)" → "Edtech" (영문 모드일 때) */
+const localizeIndustry = (raw: string | undefined, isEn: boolean): string => {
+  if (!raw) return isEn ? "N/A" : "미지정";
+  if (!isEn) return raw;
+  // KO 목록에서 인덱스 찾아 EN 목록 반환
+  const idx = INDUSTRY_CATEGORIES_KO.indexOf(raw);
+  if (idx !== -1) return INDUSTRY_CATEGORIES_EN[idx];
+  // 이미 EN 값이거나 커스텀 입력이면 그대로
+  return raw;
+};
+
 export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allSellers = [], buyerId, user }: any) {
-  // i18n 및 Router 설정
   const { t, locale } = useI18n();
   const router = useRouter(); 
   const searchParams = useSearchParams();
@@ -66,6 +106,8 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   const [aiIsFallback, setAiIsFallback] = useState(false);
   const [aiSearched, setAiSearched] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+
+  const isEn = locale === "en";
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^0-9]/g, "");
@@ -201,32 +243,57 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
 
   if (!mounted || !user) return null;
 
+  // ─── locale별 셀러 표시 데이터 헬퍼 ───
+  const getSellerDisplay = (seller: any) => {
+    const o = seller.onePager;
+    return {
+      companyName    : isEn ? (o?.companyNameEn || seller.companyNameEn || seller.companyName) : seller.companyName,
+      companyNameSub : isEn ? seller.companyName : (o?.companyNameEn || seller.companyNameEn || "N/A"),
+      industry       : localizeIndustry(o?.industrySector, isEn),
+      stage          : o?.investmentStage || (isEn ? "TBD" : "미정"),
+      ceoLabel       : isEn ? (o?.ceoNameEn || o?.ceoName || "-") : (o?.ceoName || "-"),
+      summary        : o?.solutionSummary || "",
+      picName        : isEn
+        ? (o?.picNameEn || o?.picName || seller.nameEn || seller.name)
+        : (o?.picName || seller.name),
+    };
+  };
+
+  // ─── 다운로드: industry도 locale 적용 ───
   const downloadSellerList = () => {
-    const data = uniqueSellers.map((s: any) => ({
-      "업체명 (Company Name KR)": s.companyName,
-      "업체명 (Company Name EN)": s.onePager?.companyNameEn || "-",
-      "산업분야 (Industry Sector)": s.onePager?.industrySector || "-",
-      "투자단계 (Investment Stage)": s.onePager?.investmentStage || "-",
-      "설립연도 (Year Founded)": s.onePager?.yearFounded || "-",
-      "대표자 (CEO Name)": s.onePager?.ceoName || "-",
-      "핵심기술 (Primary Tech)": s.onePager?.primaryTech || "-",
-      "주요제품/서비스 (Product/Service)": s.onePager?.productType || "-",
-      "솔루션 요약 (Solution Summary)": s.onePager?.solutionSummary || "-",
-      "시장 문제점 (Problem)": s.onePager?.problem || "-",
-      "해결 방안 (Solution)": s.onePager?.solution || "-",
-      "성과 지표 (Traction)": s.onePager?.traction || "-",
-      "비즈니스 모델 (Business Model)": s.onePager?.bizModel || "-",
-      "등록 멤버 수 (Registered Members)": s.members.length,
-      "담당자명 (PIC Name)": s.onePager?.picName || s.name || "-",
-      "담당자 직함 (Job Title)": s.jobTitle || "-",
-      "담당자 이메일 (Email)": s.onePager?.contactEmail || s.email || "-",
-      "담당자 연락처 (Phone)": s.phone || "-",
-      "홈페이지 (Website)": s.onePager?.websiteUrl || "-"
-    }));
+    const data = uniqueSellers.map((s: any) => {
+      const o = s.onePager;
+      return {
+        [isEn ? "Company (KR)"            : "업체명 (한글)"]          : s.companyName || "-",
+        [isEn ? "Company (EN)"            : "업체명 (영문)"]          : o?.companyNameEn || s.companyNameEn || "-",
+        [isEn ? "Industry"                : "산업분야"]               : localizeIndustry(o?.industrySector, isEn) || "-",
+        [isEn ? "Investment Stage"        : "투자단계"]               : o?.investmentStage || "-",
+        [isEn ? "Year Founded"            : "설립연도"]               : o?.yearFounded || "-",
+        [isEn ? "CEO (KR)"               : "대표자 (한글)"]          : o?.ceoName || "-",
+        [isEn ? "CEO (EN)"               : "대표자 (영문)"]          : o?.ceoNameEn || "-",
+        [isEn ? "Primary Tech"            : "핵심기술"]               : o?.primaryTech || "-",
+        [isEn ? "Product / Service"       : "주요제품/서비스"]        : o?.productType || "-",
+        [isEn ? "Solution Summary"        : "솔루션 요약"]            : o?.solutionSummary || "-",
+        [isEn ? "Problem"                 : "시장 문제점"]            : o?.problem || "-",
+        [isEn ? "Solution"                : "해결 방안"]              : o?.solution || "-",
+        [isEn ? "Traction"                : "성과 지표"]              : o?.traction || "-",
+        [isEn ? "Business Model"          : "비즈니스 모델"]          : o?.bizModel || "-",
+        [isEn ? "Monthly Revenue"         : "월 매출 수준"]           : o?.monthlyRevenue || "-",
+        [isEn ? "Team Size"               : "등록 멤버 수"]           : s.members.length,
+        [isEn ? "PIC Name (KR)"          : "담당자명 (한글)"]        : o?.picName || s.name || "-",
+        [isEn ? "PIC Name (EN)"          : "담당자명 (영문)"]        : o?.picNameEn || s.nameEn || "-",
+        [isEn ? "PIC Title (KR)"         : "담당자 직함 (한글)"]     : o?.picTitle || s.jobTitle || "-",
+        [isEn ? "PIC Title (EN)"         : "담당자 직함 (영문)"]     : o?.picTitleEn || s.jobTitleEn || "-",
+        [isEn ? "Contact Email"           : "담당자 이메일"]          : o?.contactEmail || s.email || "-",
+        [isEn ? "Phone"                   : "담당자 연락처"]          : s.phone || "-",
+        [isEn ? "LinkedIn"                : "LinkedIn"]               : o?.linkedinUrl || s.linkedinUrl || "-",
+        [isEn ? "Pitch Deck"              : "피치덱 URL"]             : o?.pitchDeckUrl || "-",
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Company_Database");
-    XLSX.writeFile(wb, `Company_Database_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `Company_Database_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   const downloadConfirmedMeetings = () => {
@@ -496,7 +563,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
       {/* ── 메인 콘텐츠 ── */}
       <main className="min-h-[600px]">
 
-        {/* ── [A] 셀러 탐색 (모바일 카드 가독성 개선) ── */}
+        {/* ── [A] 셀러 탐색 ── */}
         {expandedSection === 'directory' && (
           <section className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 px-1 md:px-0">
 
@@ -547,7 +614,9 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   className="w-full md:w-64 px-5 py-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 rounded-[18px] text-sm font-bold text-slate-600 outline-none appearance-none transition-all cursor-pointer"
                 >
                   <option value="ALL">{t.buyer.directory.allIndustries}</option>
-                  {Object.keys(stats.industries).map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                  {Object.keys(stats.industries).map(ind => (
+                    <option key={ind} value={ind}>{localizeIndustry(ind, isEn)}</option>
+                  ))}
                 </select>
               </div>
             ) : (
@@ -598,144 +667,148 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 </div>
               </div>
             )}
-{aiSearchMode && !aiLoading && aiSearched && (
-  <AiSearchResultCard
-    results={aiResults}
-    query={aiQuery}
-    isFallback={aiIsFallback}
-    error={aiError}
-    locale={locale}
-    isMatched={(companyName) =>
-      uniqueSellers.some((s: any) =>
-        isCompanyMatch(s.companyName || "", companyName) ||
-        isCompanyMatch(s.onePager?.companyNameKr || "", companyName) ||
-        isCompanyMatch(s.onePager?.companyNameEn || "", companyName)
-      )
-    }
-    onViewOnePager={(companyName) => {
-      const matched = uniqueSellers.find((s: any) =>
-        isCompanyMatch(s.companyName || "", companyName) ||
-        isCompanyMatch(s.onePager?.companyNameKr || "", companyName)
-      );
-      if (matched) setSelectedOnePager({ ...matched.onePager, user: matched, members: matched.members });
-    }}
-  />
-)}
-            {/* 셀러 리스트 (반응형: 모바일 카드, 데스크탑 테이블) */}
+
+            {aiSearchMode && !aiLoading && aiSearched && (
+              <AiSearchResultCard
+                results={aiResults}
+                query={aiQuery}
+                isFallback={aiIsFallback}
+                error={aiError}
+                locale={locale}
+                isMatched={(companyName) =>
+                  uniqueSellers.some((s: any) =>
+                    isCompanyMatch(s.companyName || "", companyName) ||
+                    isCompanyMatch(s.onePager?.companyNameKr || "", companyName) ||
+                    isCompanyMatch(s.onePager?.companyNameEn || "", companyName)
+                  )
+                }
+                onViewOnePager={(companyName) => {
+                  const matched = uniqueSellers.find((s: any) =>
+                    isCompanyMatch(s.companyName || "", companyName) ||
+                    isCompanyMatch(s.onePager?.companyNameKr || "", companyName)
+                  );
+                  if (matched) setSelectedOnePager({ ...matched.onePager, user: matched, members: matched.members });
+                }}
+              />
+            )}
+
+            {/* 셀러 리스트 */}
             {!aiSearchMode && (
-            <div className="space-y-4">
-              
-              {/* [모바일] 카드 뷰: md 미만 노출 */}
-              <div className="grid grid-cols-1 gap-4 md:hidden">
-                {filteredSellers.map((seller: any) => (
-                  <div 
-                    key={seller.id}
-                    onClick={() => setSelectedOnePager({ ...seller.onePager, user: seller, members: seller.members })}
-                    className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm active:bg-indigo-50 transition-colors"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shrink-0"><Building2 size={20}/></div>
-                        <div className="min-w-0">
-                          <h4 className="font-black text-sm text-slate-800 truncate">{seller.companyName}</h4>
-                          {locale === 'ko' && (
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate block mt-0.5">{seller.onePager?.companyNameEn || "N/A"}</span>
-                          )}
+              <div className="space-y-4">
+                
+                {/* [모바일] 카드 뷰 */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {filteredSellers.map((seller: any) => {
+                    const d = getSellerDisplay(seller);
+                    return (
+                      <div 
+                        key={seller.id}
+                        onClick={() => setSelectedOnePager({ ...seller.onePager, user: seller, members: seller.members })}
+                        className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm active:bg-indigo-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shrink-0"><Building2 size={20}/></div>
+                            <div className="min-w-0">
+                              <h4 className="font-black text-sm text-slate-800 truncate">{d.companyName}</h4>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate block mt-0.5">{d.companyNameSub}</span>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black whitespace-nowrap">{d.stage}</span>
+                        </div>
+                        <div className="mb-4">
+                          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black whitespace-nowrap">{d.industry}</span>
+                          <p className="text-xs text-slate-500 font-medium mt-2 line-clamp-2 italic leading-relaxed">
+                            {d.summary ? `"${d.summary}"` : t.buyer.directory.noResults}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center pt-3 border-t border-slate-50">
+                          <div className="text-[10px] font-bold text-slate-400">
+                            {locale === "ko" ? "대표" : "CEO"}: {d.ceoLabel}
+                            {seller.members.length > 1 && <span className="text-indigo-500 ml-2 font-black">+{seller.members.length-1} Team</span>}
+                          </div>
+                          <div className="text-indigo-600 font-black text-[11px] flex items-center gap-1">
+                            {locale === "ko" ? "상세보기" : "Details"} <ChevronRight size={14}/>
+                          </div>
                         </div>
                       </div>
-                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black whitespace-nowrap">{seller.onePager?.investmentStage || "TBD"}</span>
-                    </div>
-                    <div className="mb-4">
-                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black whitespace-nowrap">{seller.onePager?.industrySector || "미지정"}</span>
-                      <p className="text-xs text-slate-500 font-medium mt-2 line-clamp-2 italic leading-relaxed">
-                        {seller.onePager?.solutionSummary ? `"${seller.onePager.solutionSummary}"` : t.buyer.directory.noResults}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                      <div className="text-[10px] font-bold text-slate-400">
-                        {locale === "ko" ? "대표" : "CEO"}: {seller.onePager?.ceoName || "-"}
-                        {seller.members.length > 1 && <span className="text-indigo-500 ml-2 font-black">+{seller.members.length-1} Team</span>}
-                      </div>
-                      <div className="text-indigo-600 font-black text-[11px] flex items-center gap-1">
-                        {locale === "ko" ? "상세보기" : "Details"} <ChevronRight size={14}/>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* [데스크탑] 테이블 뷰: md 이상 노출 */}
-              <div className="hidden md:block bg-white rounded-[24px] md:rounded-[30px] shadow-sm border border-slate-100 overflow-hidden">
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[850px]">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "회사명" : "Company Name"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "산업 분야" : "Industry Sector"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "투자 단계" : "Investment Stage"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "솔루션 요약" : "Solution Summary"}</th>
-                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{locale === "ko" ? "멤버/대표" : "PIC/CEO"}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredSellers.map((seller: any) => (
-                        <tr
-                          key={seller.id}
-                          onClick={() => setSelectedOnePager({ ...seller.onePager, user: seller, members: seller.members })}
-                          className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
-                        >
-                          <td className="px-5 md:px-6 py-5">
-                            <div className="flex items-center gap-3 md:gap-4">
-                              <div className="w-10 h-10 bg-slate-100 rounded-[12px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                <Building2 size={20}/>
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-black text-sm text-slate-800 truncate">{seller.companyName}</h4>
-                                {locale === 'ko' && (
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate block mt-0.5">{seller.onePager?.companyNameEn || "N/A"}</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-5 md:px-6 py-5">
-                            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-black whitespace-nowrap">{seller.onePager?.industrySector || "미지정"}</span>
-                          </td>
-                          <td className="px-5 md:px-6 py-5">
-                            <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-black whitespace-nowrap">{seller.onePager?.investmentStage || "미정"}</span>
-                          </td>
-                          <td className="px-5 md:px-6 py-5 max-w-[280px]">
-                            <p className="text-xs text-slate-500 font-medium truncate italic">
-                              {seller.onePager?.solutionSummary ? `"${seller.onePager.solutionSummary}"` : t.buyer.directory.noResults}
-                            </p>
-                          </td>
-                          <td className="px-5 md:px-6 py-5 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              <div className="text-right">
-                                <p className="text-[10px] font-bold text-slate-400">{locale === "ko" ? "대표" : "CEO"}: {seller.onePager?.ceoName || "-"}</p>
-                                {seller.members.length > 1 && (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-500 mt-1">
-                                    <UserIcon size={10}/> {locale === "ko" ? "멤버" : "Team"} {seller.members.length}명
-                                  </span>
-                                )}
-                              </div>
-                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors shrink-0">
-                                <ChevronRight size={16}/>
-                              </div>
-                            </div>
-                          </td>
+                {/* [데스크탑] 테이블 뷰 */}
+                <div className="hidden md:block bg-white rounded-[24px] md:rounded-[30px] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[850px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "회사명" : "Company Name"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "산업 분야" : "Industry Sector"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{locale === "ko" ? "투자 단계" : "Investment Stage"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "솔루션 요약" : "Solution Summary"}</th>
+                          <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{locale === "ko" ? "멤버/대표" : "PIC/CEO"}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredSellers.map((seller: any) => {
+                          const d = getSellerDisplay(seller);
+                          return (
+                            <tr
+                              key={seller.id}
+                              onClick={() => setSelectedOnePager({ ...seller.onePager, user: seller, members: seller.members })}
+                              className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
+                            >
+                              <td className="px-5 md:px-6 py-5">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-[12px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    <Building2 size={20}/>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="font-black text-sm text-slate-800 truncate">{d.companyName}</h4>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate block mt-0.5">{d.companyNameSub}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 md:px-6 py-5">
+                                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-black whitespace-nowrap">{d.industry}</span>
+                              </td>
+                              <td className="px-5 md:px-6 py-5">
+                                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-black whitespace-nowrap">{d.stage}</span>
+                              </td>
+                              <td className="px-5 md:px-6 py-5 max-w-[280px]">
+                                <p className="text-xs text-slate-500 font-medium truncate italic">
+                                  {d.summary ? `"${d.summary}"` : t.buyer.directory.noResults}
+                                </p>
+                              </td>
+                              <td className="px-5 md:px-6 py-5 text-right">
+                                <div className="flex items-center justify-end gap-3">
+                                  <div className="text-right">
+                                    <p className="text-[10px] font-bold text-slate-400">{locale === "ko" ? "대표" : "CEO"}: {d.ceoLabel}</p>
+                                    {seller.members.length > 1 && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-500 mt-1">
+                                        <UserIcon size={10}/> {locale === "ko" ? "멤버" : "Team"} {seller.members.length}{locale === "ko" ? "명" : ""}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors shrink-0">
+                                    <ChevronRight size={16}/>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
 
-              {filteredSellers.length === 0 && (
-                <div className="bg-white rounded-[24px] py-16 text-center border-2 border-dashed border-slate-100">
-                  <p className="text-slate-400 font-bold">{t.buyer.directory.noResults}</p>
-                </div>
-              )}
-            </div>
+                {filteredSellers.length === 0 && (
+                  <div className="bg-white rounded-[24px] py-16 text-center border-2 border-dashed border-slate-100">
+                    <p className="text-slate-400 font-bold">{t.buyer.directory.noResults}</p>
+                  </div>
+                )}
+              </div>
             )}
           </section>
         )}
@@ -810,7 +883,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               <div className="w-8 h-8 bg-slate-100 rounded-[10px] flex items-center justify-center text-slate-400 shrink-0"><Building2 size={16}/></div>
                               <div>
                                 <p className="font-black text-sm text-slate-800 whitespace-nowrap">{m.seller.companyName}</p>
-                                <p className="text-[10px] font-bold text-slate-400 mt-0.5">{m.seller.onePager?.industrySector || "-"}</p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-0.5">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || "-"}</p>
                               </div>
                             </div>
                           </td>
@@ -966,7 +1039,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                       <p className="font-black text-sm text-slate-800 whitespace-nowrap">{m.seller.companyName}</p>
                                       {isConfirmed && <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap"><CheckCircle2 size={9}/> {locale === "ko" ? "확정" : "Done"}</span>}
                                     </div>
-                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5 whitespace-nowrap">{m.seller.onePager?.industrySector || '산업 미지정'}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5 whitespace-nowrap">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || (isEn ? 'N/A' : '산업 미지정')}</p>
                                   </div>
                                 </div>
                               </td>
@@ -1033,7 +1106,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="font-black text-slate-800 text-sm truncate">{m.seller.companyName}</span>
-                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md whitespace-nowrap">{m.seller.onePager?.industrySector || "산업 미지정"}</span>
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md whitespace-nowrap">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || (isEn ? "N/A" : "산업 미지정")}</span>
                                     </div>
                                     <p className="text-[11px] font-bold text-slate-500 mt-1 flex items-center gap-1 truncate"><UserIcon size={12}/> {m.seller.name} {m.seller.jobTitle ? `(${m.seller.jobTitle})` : ''}</p>
                                   </div>
@@ -1114,7 +1187,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   {Object.entries(stats.industries).map(([name, count]: any) => (
                     <div key={name} className="space-y-2.5">
                       <div className="flex justify-between text-[11px] md:text-xs font-black">
-                        <span className="text-slate-600">{name}</span>
+                        <span className="text-slate-600">{localizeIndustry(name, isEn)}</span>
                         <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{count}{locale === "ko" ? "개사" : " cos"} ({((count/uniqueSellers.length)*100).toFixed(1)}%)</span>
                       </div>
                       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
@@ -1148,10 +1221,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
           </section>
         )}
 
-        {/* ── [F] 정보 수정 ── */}
+        {/* ── [F] 정보 수정 — 바이어 전용 (원페이저/회사공통정보 없음) ── */}
         {expandedSection === 'profile' && (
           <section className="animate-in fade-in slide-in-from-bottom-4 px-1 md:px-0">
             <div className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white">
+              {/* 헤더 */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-10 border-b border-slate-100 pb-6 md:pb-8">
                 <div className="flex items-center gap-4 w-full">
                   <div className="w-14 h-14 md:w-16 md:h-16 shrink-0 bg-slate-900 rounded-[18px] md:rounded-3xl flex items-center justify-center text-white shadow-xl"><UserIcon size={28}/></div>
@@ -1167,57 +1241,133 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   </div>
                 </div>
               </div>
-              <form onSubmit={handleProfileUpdate} className="flex flex-col md:grid md:grid-cols-2 gap-5 md:gap-8">
-                <div className="flex flex-col space-y-2">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Building2 size={12}/> {t.buyer.profile.companyLabel}</p>
-                    {!user.isMaster && <span className="text-[9px] text-rose-400 font-bold">{t.buyer.profile.masterOnly}</span>}
+
+              <form onSubmit={handleProfileUpdate} className="space-y-10">
+
+                {/* ── 개인정보 (마스터/멤버 공통) ── */}
+                <div>
+                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <UserIcon size={14}/> {locale === "ko" ? "개인 정보" : "Personal Info"}
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                    {/* 이메일 (고정) */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Mail size={12}/> {t.buyer.profile.emailFixed}</p>
+                      <input defaultValue={user.email} disabled className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm font-bold bg-slate-100 border-transparent text-slate-400 cursor-not-allowed"/>
+                      <input type="hidden" name="email" value={user.email}/>
+                    </div>
+                    {/* 성함 (한글) */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {locale === "ko" ? "성함 (한글)" : "Full Name"}</p>
+                      <input name="name" defaultValue={user.name} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
+                    {/* 영문 이름 */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {locale === "ko" ? "영문 이름" : "Name (EN)"}</p>
+                      <input name="nameEn" defaultValue={user.nameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
+                    {/* 연락처 */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Phone size={12}/> {t.buyer.profile.phoneLabel}</p>
+                      <input name="phone" value={editPhone} onChange={handlePhoneChange} maxLength={13} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
+                    {/* 직함 (한글) */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {locale === "ko" ? "직함 (한글)" : "Job Title"}</p>
+                      <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
+                    {/* 직함 (영문) */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {locale === "ko" ? "직함 (영문)" : "Job Title (EN)"}</p>
+                      <input name="jobTitleEn" defaultValue={user.jobTitleEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
+                    {/* 새 비밀번호 */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">{t.buyer.profile.newPassword}</p>
+                      <input name="password" type="password" placeholder="8+ characters" value={editPassword} onChange={e => setEditPassword(e.target.value)} className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${editPassword.length > 0 && editPassword.length < 8 ? 'border-rose-400 focus:border-rose-500' : 'border-transparent focus:bg-white focus:border-indigo-500'}`}/>
+                    </div>
+                    {/* 비밀번호 확인 */}
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">{t.buyer.profile.confirmPassword}</p>
+                      <input name="confirmPassword" type="password" placeholder="Re-enter password" value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${editConfirmPassword && editPassword !== editConfirmPassword ? 'border-rose-500 bg-rose-50' : 'border-transparent focus:bg-white focus:border-indigo-500'}`}/>
+                    </div>
+                    {/* 회원 유형 */}
+                    <div className="flex flex-col space-y-3 md:col-span-2 pt-2 border-t border-slate-100">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Target size={12}/> {t.buyer.profile.userTypeLabel}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {["VC","AC", locale === "ko" ? "바이어" : "Buyer", locale === "ko" ? "스타트업" : "Startup", locale === "ko" ? "기타" : "Other"].map((v) => (
+                          <label key={v} className={`flex-1 min-w-[72px] text-center p-3 md:p-4 rounded-[16px] cursor-pointer text-xs md:text-sm font-black transition-all border ${editSelectedType === v ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"}`}>
+                            <input type="radio" name="userType" value={v} className="hidden" checked={editSelectedType === v} onChange={(e) => setEditSelectedType(e.target.value)}/>
+                            {v}
+                          </label>
+                        ))}
+                      </div>
+                      {(editSelectedType === "기타" || editSelectedType === "Other") && (
+                        <input name="userTypeDetail" type="text" placeholder={t.register.userTypeOtherPlaceholder} required value={editUserTypeDetail} onChange={(e) => setEditUserTypeDetail(e.target.value)} className="w-full p-4 mt-2 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      )}
+                    </div>
+                    {/* 관심 파트너 */}
+                    <div className="flex flex-col space-y-2 md:col-span-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Lightbulb size={12}/> {t.buyer.profile.preferredLabel}</p>
+                      <textarea name="preferredPartners" defaultValue={user.preferredPartners} placeholder={t.register.preferredPartnersPlaceholder} className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[20px] md:rounded-3xl border h-28 md:h-32 text-sm md:text-base font-bold resize-none leading-relaxed transition-all"/>
+                    </div>
+                    {/* LinkedIn */}
+                    <div className="flex flex-col space-y-2 md:col-span-2">
+                      <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Globe size={12}/> LinkedIn</p>
+                      <input name="linkedinUrl" defaultValue={user.linkedinUrl} placeholder="https://linkedin.com/in/..." className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                    </div>
                   </div>
-                  <input name="companyName" defaultValue={user.companyName} disabled={!user.isMaster} className={`w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${user.isMaster ? 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none' : 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed'}`}/>
                 </div>
-                <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Mail size={12}/> {t.buyer.profile.emailFixed}</p>
-                  <input name="email" defaultValue={user.email} disabled className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm font-bold bg-slate-100 border-transparent text-slate-400 cursor-not-allowed"/>
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {t.buyer.profile.nameLabel}</p>
-                  <input name="name" defaultValue={user.name} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Phone size={12}/> {t.buyer.profile.phoneLabel}</p>
-                  <input name="phone" value={editPhone} onChange={handlePhoneChange} maxLength={13} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
-                </div>
-                <div className="flex flex-col space-y-2 md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Check size={12}/> {t.buyer.profile.jobTitleLabel}</p>
-                  <input name="jobTitle" defaultValue={user.jobTitle} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">{t.buyer.profile.newPassword}</p>
-                  <input name="password" type="password" placeholder="8+ characters" value={editPassword} onChange={e => setEditPassword(e.target.value)} className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${editPassword.length > 0 && editPassword.length < 8 ? 'border-rose-400 focus:border-rose-500' : 'border-transparent focus:bg-white focus:border-indigo-500'}`}/>
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest">{t.buyer.profile.confirmPassword}</p>
-                  <input name="confirmPassword" type="password" placeholder="Re-enter password" value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} className={`w-full p-3.5 md:p-4 bg-slate-50 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all ${editConfirmPassword && editPassword !== editConfirmPassword ? 'border-rose-500 bg-rose-50' : 'border-transparent focus:bg-white focus:border-indigo-500'}`}/>
-                </div>
-                <div className="flex flex-col space-y-3 md:col-span-2 pt-4 border-t border-slate-100">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Target size={12}/> {t.buyer.profile.userTypeLabel}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {["VC","AC", locale === "ko" ? "바이어" : "Buyer", locale === "ko" ? "스타트업" : "Startup", locale === "ko" ? "기타" : "Other"].map((v) => (
-                      <label key={v} className={`flex-1 min-w-[72px] text-center p-3 md:p-4 rounded-[16px] cursor-pointer text-xs md:text-sm font-black transition-all border ${editSelectedType === v ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"}`}>
-                        <input type="radio" name="userType" value={v} className="hidden" checked={editSelectedType === v} onChange={(e) => setEditSelectedType(e.target.value)}/>
-                        {v}
-                      </label>
-                    ))}
-                  </div>
-                  {editSelectedType === (locale === "ko" ? "기타" : "Other") && (
-                    <input name="userTypeDetail" type="text" placeholder={t.register.userTypeOtherPlaceholder} required value={editUserTypeDetail} onChange={(e) => setEditUserTypeDetail(e.target.value)} className="w-full p-4 mt-2 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
-                  )}
-                </div>
-                <div className="flex flex-col space-y-2 md:col-span-2">
-                  <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Lightbulb size={12}/> {t.buyer.profile.preferredLabel}</p>
-                  <textarea name="preferredPartners" defaultValue={user.preferredPartners} placeholder={t.register.preferredPartnersPlaceholder} className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[20px] md:rounded-3xl border h-28 md:h-32 text-sm md:text-base font-bold resize-none leading-relaxed transition-all"/>
-                </div>
-                <button type="submit" disabled={isPending || (editPassword.length > 0 && editPassword !== editConfirmPassword) || (editPassword.length > 0 && editPassword.length < 8)} className="w-full md:col-span-2 py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 shadow-xl mt-2 disabled:opacity-50 disabled:hover:bg-slate-900">
+
+{/* ── 마스터 전용: 회사 공통 정보 ── */}
+{user.isMaster && (
+  <div>
+    <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-5 flex items-center gap-2 border-b border-indigo-50 pb-3">
+      <Building2 size={14}/> {locale === "ko" ? "회사 공통 정보 (마스터 전용)" : "Company Info — Master Only"}
+    </h4>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "회사명 (한글)" : "Company (KR)"}</p>
+        <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "회사명 (영문)" : "Company (EN)"}</p>
+        <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "대표자 (한글)" : "CEO (KR)"}</p>
+        <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "대표자 (영문)" : "CEO (EN)"}</p>
+        <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "산업 분야" : "Industry Sector"}</p>
+        <input name="industrySector" defaultValue={user.industrySector || user.onePager?.industrySector} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "설립연도" : "Year Founded"}</p>
+        <input name="yearFounded" defaultValue={user.yearFounded || user.onePager?.yearFounded} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "투자 단계" : "Investment Stage"}</p>
+        <input name="investmentStage" defaultValue={user.investmentStage || user.onePager?.investmentStage} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+      <div className="flex flex-col space-y-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{locale === "ko" ? "핵심 기술" : "Primary Tech"}</p>
+        <input name="primaryTech" defaultValue={user.primaryTech || user.onePager?.primaryTech} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+      </div>
+    </div>
+  </div>
+)}
+
+                {/* 저장 버튼 */}
+                <button
+                  type="submit"
+                  disabled={isPending || (editPassword.length > 0 && editPassword !== editConfirmPassword) || (editPassword.length > 0 && editPassword.length < 8)}
+                  className="w-full py-4 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[30px] font-black text-base md:text-lg hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 shadow-xl mt-2 disabled:opacity-50 disabled:hover:bg-slate-900"
+                >
                   {isPending ? <Clock className="animate-spin" size={20}/> : <Save size={20}/>}
                   {t.buyer.profile.saveBtn}
                 </button>
@@ -1313,7 +1463,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                     <h4 className="text-lg font-black text-slate-900">{reviewingMeeting.meeting.seller.companyName}</h4>
                     <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 border border-indigo-100"><UserIcon size={12}/> {reviewingMeeting.meeting.seller.name}</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md">{reviewingMeeting.meeting.seller.onePager?.industrySector || "-"}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md">{localizeIndustry(reviewingMeeting.meeting.seller.onePager?.industrySector, isEn) || "-"}</span>
                   <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed italic">"{reviewingMeeting.meeting.seller.onePager?.solutionSummary || t.buyer.directory.noResults}"</p>
                 </div>
               </div>
@@ -1343,102 +1493,282 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
         </div>
       )}
 
-      {/* ── 원페이저 모달 ── */}
-      {selectedOnePager && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 md:p-4 bg-slate-900/80 backdrop-blur-xl animate-in fade-in zoom-in-95">
-          <div className="bg-white w-full max-w-5xl max-h-[98vh] md:max-h-[94vh] overflow-y-auto rounded-[30px] md:rounded-[50px] shadow-2xl relative scrollbar-hide border border-white/20">
-            <div className="sticky top-0 bg-white/90 backdrop-blur-md px-5 py-4 md:px-8 md:py-6 border-b border-slate-100 flex justify-between items-center z-20">
-              <div className="flex items-center gap-3 md:gap-4">
-                <div className="p-2 md:p-3 bg-indigo-600 text-white rounded-[14px] md:rounded-2xl shadow-lg shadow-indigo-100"><Award size={24} className="md:w-7 md:h-7"/></div>
-                <div className="text-left">
-                  <h3 className="text-lg md:text-2xl font-black text-slate-900 leading-none">Business One-Pager</h3>
-                  <p className="text-[9px] md:text-xs font-black text-indigo-500 uppercase mt-1 md:mt-1.5 tracking-widest">{locale === 'ko' ? '상세 정보 조회' : 'Detail View'}</p>
-                </div>
-              </div>
-              <button onClick={() => setSelectedOnePager(null)} className="p-2 md:p-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 rounded-full transition-all group"><X size={20} className="md:w-6 md:h-6 group-active:scale-90"/></button>
-            </div>
-            <div className="p-6 md:p-12 space-y-10 md:space-y-12 text-left bg-slate-50/50">
-              <div className="flex flex-col md:flex-row gap-6 md:gap-10 border-b border-slate-200/60 pb-10 md:pb-12">
-                <div className="w-24 h-24 md:w-32 md:h-32 bg-slate-900 rounded-[24px] md:rounded-[40px] flex items-center justify-center text-white shrink-0 shadow-2xl"><Building2 size={48} className="md:w-16 md:h-16"/></div>
-                <div className="space-y-4 md:space-y-5 flex-1">
-                  <div className="space-y-1">
-                    <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">{selectedOnePager.companyNameKr || selectedOnePager.user?.companyName}</h2>
-                    <p className="text-sm md:text-lg font-black text-slate-400 uppercase tracking-tighter">{selectedOnePager.companyNameEn || "N/A"}</p>
+      {/* ── 원페이저 모달 — LinkedIn 추가 + UX 개선 ── */}
+      {selectedOnePager && (() => {
+        const op = selectedOnePager;
+        const displayCompany    = isEn ? (op.companyNameEn || op.user?.companyNameEn || op.companyNameKr || op.user?.companyName) : (op.companyNameKr || op.user?.companyName);
+        const displayCompanySub = isEn ? (op.companyNameKr || op.user?.companyName || "") : (op.companyNameEn || op.user?.companyNameEn || "N/A");
+        const displayCeo        = isEn ? (op.ceoNameEn || op.ceoName || "-") : (op.ceoName || "-");
+        const displayIndustry   = localizeIndustry(op.industrySector, isEn);
+
+        return (
+          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-xl animate-in fade-in duration-200">
+            {/* 모바일: 바텀시트 / 데스크탑: 센터 모달 */}
+            <div
+              className="bg-white w-full sm:max-w-5xl sm:mx-4 max-h-[96vh] sm:max-h-[92vh] overflow-y-auto 
+                         rounded-t-[32px] sm:rounded-[40px] shadow-2xl relative 
+                         animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300
+                         scrollbar-hide border-t border-slate-100 sm:border"
+            >
+              {/* ── sticky 헤더 ── */}
+              <div className="sticky top-0 bg-white/95 backdrop-blur-md px-5 py-4 md:px-8 md:py-5 border-b border-slate-100 flex justify-between items-center z-20">
+                {/* 모바일 드래그 핸들 */}
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-slate-200 rounded-full sm:hidden" />
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="p-2 md:p-2.5 bg-indigo-600 text-white rounded-[12px] md:rounded-[14px] shadow-md shadow-indigo-200"><Award size={20} className="md:w-6 md:h-6"/></div>
+                  <div className="text-left">
+                    <h3 className="text-base md:text-xl font-black text-slate-900 leading-none">Business One-Pager</h3>
+                    <p className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">{locale === 'ko' ? '상세 정보 조회' : 'Detail View'}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="px-4 md:px-5 py-1.5 md:py-2 bg-indigo-600 text-white rounded-full text-[11px] md:text-xs font-black shadow-lg shadow-indigo-200">{selectedOnePager.industrySector}</span>
-                    <span className="px-4 md:px-5 py-1.5 md:py-2 bg-slate-900 text-white rounded-full text-[11px] font-black shadow-lg shadow-slate-200">{selectedOnePager.investmentStage}</span>
-                    <span className="px-4 md:px-5 py-1.5 md:py-2 bg-emerald-50 text-emerald-600 rounded-full text-[11px] font-black">{locale === "ko" ? "설립" : "Founded"}: {selectedOnePager.yearFounded || "-"}년</span>
-                    {selectedOnePager.ceoName && <span className="px-4 md:px-5 py-1.5 md:py-2 bg-amber-50 text-amber-600 rounded-full text-[11px] font-black">{locale === "ko" ? "대표" : "CEO"}: {selectedOnePager.ceoName}</span>}
-                  </div>
-                  {selectedOnePager.websiteUrl && (
-                    <a href={selectedOnePager.websiteUrl} target="_blank" className="inline-flex items-center gap-1.5 text-indigo-500 font-bold hover:text-indigo-700 hover:underline text-xs md:text-sm bg-indigo-50 px-3 py-1.5 rounded-lg w-fit transition-colors">
-                      <Globe size={14}/> {selectedOnePager.websiteUrl}
-                    </a>
-                  )}
                 </div>
+                <button
+                  onClick={() => setSelectedOnePager(null)}
+                  className="p-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 rounded-full transition-all active:scale-90"
+                  aria-label="Close"
+                >
+                  <X size={20}/>
+                </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 md:gap-x-12 gap-y-8 md:gap-y-10">
-                <div className="space-y-8 md:space-y-10">
-                  <section className="bg-white p-6 md:p-8 rounded-[30px] shadow-sm border border-slate-100 space-y-4">
-                    <h5 className="flex items-center gap-2 text-indigo-600 font-black text-xs md:text-sm uppercase tracking-widest border-b border-indigo-50 pb-3"><Sparkles size={18}/> {locale === "ko" ? "주요 제품 및 서비스" : "Key Product"}</h5>
-                    <p className="text-xl md:text-2xl font-black text-slate-800 leading-tight">{selectedOnePager.productType}</p>
-                    <div className="bg-indigo-50/50 p-5 md:p-6 rounded-[20px] text-slate-600 text-sm leading-relaxed font-bold">{selectedOnePager.solutionSummary}</div>
-                  </section>
-                  <section className="bg-white p-6 md:p-8 rounded-[30px] shadow-sm border border-slate-100 space-y-4">
-                    <h5 className="flex items-center gap-2 text-rose-500 font-black text-xs md:text-sm uppercase tracking-widest border-b border-rose-50 pb-3"><Target size={18}/> {locale === "ko" ? "마켓 문제점" : "Problem"}</h5>
-                    <p className="text-[14px] md:text-[15px] text-slate-600 leading-relaxed whitespace-pre-line font-medium">{selectedOnePager.problem || t.buyer.directory.noResults}</p>
-                  </section>
-                  <section className="bg-white p-6 md:p-8 rounded-[30px] shadow-sm border border-slate-100 space-y-4">
-                    <h5 className="flex items-center gap-2 text-emerald-500 font-black text-xs md:text-sm uppercase tracking-widest border-b border-emerald-50 pb-3"><TrendingUp size={18}/> {locale === "ko" ? "성과 및 지표" : "Traction"}</h5>
-                    <p className="text-[14px] md:text-[15px] text-slate-600 leading-relaxed whitespace-pre-line font-medium">{selectedOnePager.traction || t.buyer.directory.noResults}</p>
-                  </section>
-                </div>
-                <div className="space-y-8 md:space-y-10">
-                  <section className="bg-white p-6 md:p-8 rounded-[30px] shadow-sm border border-slate-100 space-y-4">
-                    <h5 className="flex items-center gap-2 text-amber-500 font-black text-xs md:text-sm uppercase tracking-widest border-b border-amber-50 pb-3"><Lightbulb size={18}/> {locale === "ko" ? "해결 방안" : "Solution"}</h5>
-                    <p className="text-[14px] md:text-[15px] text-slate-600 leading-relaxed whitespace-pre-line font-medium">{selectedOnePager.solution || t.buyer.directory.noResults}</p>
-                  </section>
-                  <section className="bg-white p-6 md:p-8 rounded-[30px] shadow-sm border border-slate-100 space-y-4">
-                    <h5 className="flex items-center gap-2 text-blue-500 font-black text-xs md:text-sm uppercase tracking-widest border-b border-blue-50 pb-3"><Briefcase size={18}/> {locale === "ko" ? "비즈니스 모델" : "Biz Model"}</h5>
-                    <p className="text-[14px] md:text-[15px] text-slate-600 leading-relaxed whitespace-pre-line font-medium">{selectedOnePager.bizModel || t.buyer.directory.noResults}</p>
-                  </section>
-                  <div className="p-6 md:p-8 bg-slate-900 rounded-[30px] text-white space-y-6 shadow-2xl relative overflow-hidden group/card">
-                    <Rocket size={100} className="absolute -bottom-6 -right-6 text-white/5 -rotate-12 transition-transform group-hover/card:scale-110 duration-700"/>
-                    <h5 className="text-[10px] md:text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2 border-b border-white/10 pb-4"><Mail size={16}/> Business Contacts</h5>
-                    <div className="space-y-6 relative z-10 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                      {selectedOnePager.members?.map((member: any, idx: number) => (
-                        <div key={idx} className={`${idx > 0 ? 'pt-6 border-t border-white/10' : ''} space-y-3.5`}>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="px-2.5 py-1 bg-white/10 rounded-md text-[9px] md:text-[10px] font-black tracking-wider uppercase">Member {idx + 1}</span>
-                            <span className="font-black text-indigo-300 text-[11px] md:text-xs bg-indigo-500/20 px-2 py-0.5 rounded">{member.onePager?.primaryTech || "Sales"}</span>
-                          </div>
-                          <div className="flex justify-between items-end">
-                            <span className="opacity-50 text-[10px] md:text-xs font-bold">{locale === "ko" ? "이름 / 직함" : "Name / Title"}</span>
-                            <span className="font-black text-sm md:text-base">{member.onePager?.picName || member.name} <span className="text-xs text-indigo-200 ml-1">{member.onePager?.picTitle ? `(${member.onePager?.picTitle})` : ''}</span></span>
-                          </div>
-                          <div className="flex justify-between items-end">
-                            <span className="opacity-50 text-[10px] md:text-xs font-bold">{locale === "ko" ? "이메일" : "Email"}</span>
-                            <span className="font-black text-xs md:text-sm text-indigo-300 underline decoration-indigo-500/50 underline-offset-4">{member.onePager?.contactEmail || member.email}</span>
-                          </div>
-                        </div>
-                      ))}
+
+              <div className="p-5 md:p-10 space-y-8 md:space-y-10 bg-slate-50/30">
+
+                {/* ── 회사 헤더 카드 ── */}
+                <div className="bg-white rounded-[24px] md:rounded-[32px] p-5 md:p-8 border border-slate-100 shadow-sm">
+                  <div className="flex flex-col sm:flex-row gap-5 md:gap-8">
+                    {/* 로고 자리 */}
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-900 rounded-[18px] md:rounded-[24px] flex items-center justify-center text-white shrink-0 shadow-xl">
+                      <Building2 size={32} className="md:w-10 md:h-10"/>
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight break-words">{displayCompany}</h2>
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-tight mt-0.5 break-words">{displayCompanySub}</p>
+                      </div>
+                      {/* 배지 그룹 */}
+                      <div className="flex flex-wrap gap-2">
+                        {displayIndustry && (
+                          <span className="px-3 py-1.5 bg-indigo-600 text-white rounded-full text-[11px] font-black shadow-md shadow-indigo-100">{displayIndustry}</span>
+                        )}
+                        {op.investmentStage && (
+                          <span className="px-3 py-1.5 bg-slate-900 text-white rounded-full text-[11px] font-black">{op.investmentStage}</span>
+                        )}
+                        {op.yearFounded && (
+                          <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-black border border-emerald-100">
+                            {locale === "ko" ? "설립" : "Est."} {op.yearFounded}{locale === "ko" ? "년" : ""}
+                          </span>
+                        )}
+                        {displayCeo && displayCeo !== "-" && (
+                          <span className="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-black border border-amber-100">
+                            {locale === "ko" ? "대표" : "CEO"}: {displayCeo}
+                          </span>
+                        )}
+                      </div>
+                      {/* 웹사이트 */}
+                      {op.websiteUrl && (
+                        <a
+                          href={op.websiteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-indigo-500 font-bold hover:text-indigo-700 text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Globe size={13}/> {op.websiteUrl}
+                          <ExternalLink size={11} className="opacity-60"/>
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="pt-8 md:pt-12 flex flex-col sm:flex-row gap-3 md:gap-4">
-                {selectedOnePager.pitchDeckUrl && (
-                  <a href={selectedOnePager.pitchDeckUrl} target="_blank" className="flex-[2] flex items-center justify-center gap-2 bg-slate-900 text-white py-4 md:py-5 rounded-[20px] md:rounded-[24px] font-black text-sm md:text-base shadow-xl hover:bg-indigo-600 transition-all active:scale-[0.98]">
-                    <FileText size={20}/> Pitch Deck (PDF) {locale === "ko" ? "다운로드" : "Download"}
-                  </a>
-                )}
-                <button onClick={() => setSelectedOnePager(null)} className="flex-1 py-4 md:py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[20px] md:rounded-[24px] font-black text-sm md:text-base hover:bg-slate-50 transition-all shadow-sm">{locale === "ko" ? "닫기" : "Close"}</button>
+
+                {/* ── 본문 그리드 ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+
+                  {/* 왼쪽 컬럼 */}
+                  <div className="space-y-5">
+                    {/* Key Product */}
+                    <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
+                      <h5 className="flex items-center gap-2 text-indigo-600 font-black text-[11px] uppercase tracking-widest">
+                        <Sparkles size={15}/> {locale === "ko" ? "주요 제품 및 서비스" : "Key Product"}
+                      </h5>
+                      <p className="text-lg md:text-xl font-black text-slate-800 leading-snug">{op.productType || <span className="text-slate-300 font-medium text-sm">—</span>}</p>
+                      {op.solutionSummary && (
+                        <div className="bg-indigo-50/60 p-4 rounded-[14px] text-slate-600 text-sm leading-relaxed font-medium border-l-2 border-indigo-300">
+                          {op.solutionSummary}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Problem */}
+                    <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
+                      <h5 className="flex items-center gap-2 text-rose-500 font-black text-[11px] uppercase tracking-widest">
+                        <Target size={15}/> {locale === "ko" ? "마켓 문제점" : "Problem"}
+                      </h5>
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
+                        {op.problem || <span className="text-slate-300">—</span>}
+                      </p>
+                    </div>
+
+                    {/* Traction */}
+                    <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
+                      <h5 className="flex items-center gap-2 text-emerald-600 font-black text-[11px] uppercase tracking-widest">
+                        <TrendingUp size={15}/> {locale === "ko" ? "성과 및 지표" : "Traction"}
+                      </h5>
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
+                        {op.traction || <span className="text-slate-300">—</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 오른쪽 컬럼 */}
+                  <div className="space-y-5">
+                    {/* Solution */}
+                    <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
+                      <h5 className="flex items-center gap-2 text-amber-500 font-black text-[11px] uppercase tracking-widest">
+                        <Lightbulb size={15}/> {locale === "ko" ? "해결 방안" : "Solution"}
+                      </h5>
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
+                        {op.solution || <span className="text-slate-300">—</span>}
+                      </p>
+                    </div>
+
+                    {/* Biz Model */}
+                    <div className="bg-white p-5 md:p-7 rounded-[20px] md:rounded-[24px] shadow-sm border border-slate-100 space-y-3">
+                      <h5 className="flex items-center gap-2 text-blue-500 font-black text-[11px] uppercase tracking-widest">
+                        <Briefcase size={15}/> {locale === "ko" ? "비즈니스 모델" : "Biz Model"}
+                      </h5>
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
+                        {op.bizModel || <span className="text-slate-300">—</span>}
+                      </p>
+                    </div>
+
+                    {/* ── 비즈니스 연락처 카드 (LinkedIn 포함) ── */}
+                    <div className="bg-slate-900 rounded-[20px] md:rounded-[24px] overflow-hidden shadow-xl">
+                      {/* 헤더 */}
+                      <div className="px-5 py-4 border-b border-white/10 flex items-center gap-2">
+                        <Mail size={14} className="text-indigo-400"/>
+                        <h5 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Business Contacts</h5>
+                      </div>
+                      {/* 멤버 목록 */}
+                      <div className="divide-y divide-white/10 max-h-72 overflow-y-auto">
+                        {op.members?.map((member: any, idx: number) => {
+                          const mOp = member.onePager;
+                          const mPicName  = isEn
+                            ? (mOp?.picNameEn  || mOp?.picName  || member.nameEn || member.name)
+                            : (mOp?.picName  || member.name);
+                          const mPicTitle = isEn
+                            ? (mOp?.picTitleEn || mOp?.picTitle || member.jobTitleEn || member.jobTitle)
+                            : (mOp?.picTitle || member.jobTitle);
+                          const memberEmail = mOp?.contactEmail || member.email;
+                          const memberPhone = member.phone;
+                          // LinkedIn: onePager > user 순으로 체크
+                          const memberLinkedIn = mOp?.linkedinUrl || member.linkedinUrl;
+
+                          return (
+                            <div key={idx} className="p-5 space-y-3">
+                              {/* 멤버 넘버 + 기술 뱃지 */}
+                              <div className="flex items-center justify-between">
+                                <span className="px-2.5 py-1 bg-white/10 rounded-md text-[9px] font-black tracking-wider uppercase text-slate-400">
+                                  Member {idx + 1}
+                                </span>
+                                {(mOp?.primaryTech || member.primaryTech) && (
+                                  <span className="font-black text-indigo-300 text-[10px] bg-indigo-500/20 px-2 py-0.5 rounded-md">
+                                    {mOp?.primaryTech || member.primaryTech}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* 이름 / 직함 */}
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="text-[10px] text-slate-500 font-bold shrink-0 pt-0.5">
+                                  {locale === "ko" ? "이름 / 직함" : "Name / Title"}
+                                </span>
+                                <span className="font-black text-white text-sm text-right">
+                                  {mPicName}
+                                  {mPicTitle && <span className="text-indigo-300 text-xs font-bold ml-1">({mPicTitle})</span>}
+                                </span>
+                              </div>
+
+                              {/* 이메일 */}
+                              {memberEmail && (
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-[10px] text-slate-500 font-bold shrink-0">
+                                    {locale === "ko" ? "이메일" : "Email"}
+                                  </span>
+                                  <a
+                                    href={`mailto:${memberEmail}`}
+                                    className="font-bold text-xs text-indigo-300 hover:text-indigo-200 underline decoration-indigo-500/40 underline-offset-3 transition-colors text-right truncate max-w-[180px]"
+                                  >
+                                    {memberEmail}
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* 전화 */}
+                              {memberPhone && (
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-[10px] text-slate-500 font-bold shrink-0">
+                                    {locale === "ko" ? "연락처" : "Phone"}
+                                  </span>
+                                  <a
+                                    href={`tel:${memberPhone}`}
+                                    className="font-bold text-xs text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+                                  >
+                                    <Phone size={11} className="text-slate-500 shrink-0"/>
+                                    {memberPhone}
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* LinkedIn ── 신규 추가 */}
+                              {memberLinkedIn && (
+                                <div className="pt-1">
+                                  <a
+                                    href={memberLinkedIn.startsWith('http') ? memberLinkedIn : `https://${memberLinkedIn}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#0A66C2]/20 hover:bg-[#0A66C2]/40 border border-[#0A66C2]/30 hover:border-[#0A66C2]/60 rounded-xl text-[#70B5F9] hover:text-white text-[11px] font-black transition-all active:scale-95 group"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                    </svg>
+                                    LinkedIn Profile
+                                    <ExternalLink size={11} className="opacity-60 group-hover:opacity-100 transition-opacity"/>
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── 하단 액션 버튼 ── */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2 pb-safe">
+                  {op.pitchDeckUrl && (
+                    <a
+                      href={op.pitchDeckUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-[2] flex items-center justify-center gap-2 bg-slate-900 text-white py-4 rounded-[16px] font-black text-sm shadow-lg hover:bg-indigo-600 transition-all active:scale-[0.98]"
+                    >
+                      <FileText size={18}/>
+                      {locale === "ko" ? "피치덱 다운로드" : "Download Pitch Deck"}
+                      <ExternalLink size={13} className="opacity-60"/>
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setSelectedOnePager(null)}
+                    className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm"
+                  >
+                    {locale === "ko" ? "닫기" : "Close"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 스크롤바 CSS */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -1447,6 +1777,8 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
       `}} />
     </div>
   );
