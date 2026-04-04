@@ -69,6 +69,9 @@ export async function updateProfileAction(formData: FormData) {
   const isMasterOrAdmin =
     currentUser.role === "ADMIN" || currentUser.isMaster;
 
+  // ── [수정] 셀러 역할인지 여부 — onePager upsert는 셀러 마스터/어드민만 실행 ──
+  const isSeller = currentUser.role === "SELLER";
+
   try {
     if (isMasterOrAdmin) {
       // ── 회사 기본정보 (User 테이블) ──
@@ -82,7 +85,7 @@ export async function updateProfileAction(formData: FormData) {
       const investmentStage  = formData.get("investmentStage") as string;
       const yearFounded      = formData.get("yearFounded") as string;
 
-      // ── onePager 필드 ──
+      // ── onePager 필드 (셀러 전용) ──
       const onePagerData = {
         companyNameKr:  newCompanyName,
         companyNameEn,
@@ -132,12 +135,18 @@ export async function updateProfileAction(formData: FormData) {
             yearFounded,
           },
         });
-        // onePager upsert (없으면 생성, 있으면 수정)
-        await tx.onePager.upsert({
-          where:  { userId },
-          update: onePagerData,
-          create: { userId, ...onePagerData },
-        });
+        // [수정] onePager upsert는 셀러 역할인 경우에만 실행
+        // 바이어(BUYER) 및 어드민(ADMIN)은 onePager가 없으므로 건너뜀
+        if (isSeller) {
+          await tx.onePager.upsert({
+            where:  { userId },
+            update: onePagerData,
+            create: {
+              ...onePagerData,
+              user: { connect: { id: userId } },
+            },
+          });
+        }
       });
     } else {
       // 멤버: 개인정보만 수정

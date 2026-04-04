@@ -18,7 +18,7 @@ import {
   BarChart3, ChevronRight, PieChart, UserCheck, Save, User as UserIcon, Calendar, Settings, Handshake, Globe, Award,
   CheckCircle2, AlertCircle, Info, Rocket, Bell, Check, XCircle, FileSearch, ArrowRight, Activity, Zap,
   Users, ShieldCheck, Edit2, Trash2, Inbox,
-  LayoutList, LayoutGrid, ExternalLink
+  LayoutList, LayoutGrid, ExternalLink, Video, MapPinned, Link as LinkIcon
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import React from "react";
@@ -57,12 +57,21 @@ const INDUSTRY_CATEGORIES_EN = [
 const localizeIndustry = (raw: string | undefined, isEn: boolean): string => {
   if (!raw) return isEn ? "N/A" : "미지정";
   if (!isEn) return raw;
-  // KO 목록에서 인덱스 찾아 EN 목록 반환
   const idx = INDUSTRY_CATEGORIES_KO.indexOf(raw);
   if (idx !== -1) return INDUSTRY_CATEGORIES_EN[idx];
-  // 이미 EN 값이거나 커스텀 입력이면 그대로
   return raw;
 };
+
+/** URL 정규화: http/https 없으면 https:// 자동 추가 */
+const normalizeUrl = (url: string): string => {
+  if (!url || !url.trim()) return url;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
+// ─── 상수: 추후 공지 placeholder 값 ───
+const TBA_VALUE = "__TBA__";
 
 export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allSellers = [], buyerId, user }: any) {
   const { t, locale } = useI18n();
@@ -98,6 +107,9 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
 
+  // [CHANGE 4] LinkedIn URL 정규화를 위한 state
+  const [editLinkedinUrl, setEditLinkedinUrl] = useState(user?.linkedinUrl || "");
+
   // AI 검색 state
   const [aiSearchMode, setAiSearchMode] = useState(false);
   const [aiQuery, setAiQuery] = useState("");
@@ -106,6 +118,22 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   const [aiIsFallback, setAiIsFallback] = useState(false);
   const [aiSearched, setAiSearched] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // ── 슬롯 생성: 온라인/오프라인 선택 state ──
+  const [createMeetingType, setCreateMeetingType] = useState<'offline' | 'online'>('offline');
+  const [createLocationValue, setCreateLocationValue] = useState("");
+  // ── 슬롯 생성: 온라인 링크 TBA 선택 state (신규) ──
+  const [createLinkTba, setCreateLinkTba] = useState(false);
+  // ── 슬롯 생성: 추가 안내사항 state (신규) ──
+  const [createNote, setCreateNote] = useState("");
+
+  // ── 슬롯 수정: 온라인/오프라인 선택 state ──
+  const [editMeetingType, setEditMeetingType] = useState<'offline' | 'online'>('offline');
+  const [editLocationValue, setEditLocationValue] = useState("");
+  // ── 슬롯 수정: 온라인 링크 TBA 선택 state (신규) ──
+  const [editLinkTba, setEditLinkTba] = useState(false);
+  // ── 슬롯 수정: 추가 안내사항 state (신규) ──
+  const [editNote, setEditNote] = useState("");
 
   const isEn = locale === "en";
 
@@ -116,6 +144,14 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     else if (value.length <= 7) formatted = `${value.slice(0, 3)}-${value.slice(3)}`;
     else formatted = `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7, 11)}`;
     setEditPhone(formatted);
+  };
+
+  // [CHANGE 4] LinkedIn URL 입력 핸들러: 포커스 아웃 시 https:// 자동 추가
+  const handleLinkedinBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    if (val && !/^https?:\/\//i.test(val)) {
+      setEditLinkedinUrl(`https://${val}`);
+    }
   };
 
   const totalPendingRequests = useMemo(() => {
@@ -167,6 +203,18 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     }));
     setCounts({ sellers: currentSellers, confirmed: currentConfirmed, requests: currentRequests });
   }, [allSellers, confirmedMeetings, mySlots]);
+
+  // editingSlot이 열릴 때 미팅 타입 / 장소값 / TBA / note 초기화
+  useEffect(() => {
+    if (!editingSlot) return;
+    const loc = editingSlot.location || "";
+    const isTba = loc === TBA_VALUE;
+    const isOnline = isTba || /^https?:\/\//i.test(loc) || /^www\./i.test(loc) || loc.includes("zoom") || loc.includes("meet.") || loc.includes("teams");
+    setEditMeetingType(isOnline ? 'online' : 'offline');
+    setEditLinkTba(isTba);
+    setEditLocationValue(isTba ? "" : loc);
+    setEditNote(editingSlot.note || "");
+  }, [editingSlot]);
 
   const handleTabClick = (id: string) => {
     setExpandedSection(id);
@@ -347,6 +395,15 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
       alert(isEn ? "🚨 You cannot create slots in the past." : "🚨 과거 시간으로는 슬롯을 생성할 수 없습니다. 현재 시간 이후를 선택해주세요.");
       return;
     }
+    // ── 온라인 TBA 처리 (신규) ──
+    if (createMeetingType === 'online') {
+      if (createLinkTba) {
+        formData.set("location", TBA_VALUE);
+      } else {
+        const rawLocation = formData.get("location") as string;
+        formData.set("location", normalizeUrl(rawLocation));
+      }
+    }
     if (!confirm(isEn ? "Create new slot at the selected time?" : "선택한 시간에 새로운 상담 슬롯을 생성하시겠습니까?")) return;
     setIsPending(true);
     try { 
@@ -356,6 +413,10 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
         return;
       }
       handleTabClick('pending');
+      setCreateMeetingType('offline');
+      setCreateLocationValue("");
+      setCreateLinkTba(false);
+      setCreateNote("");
       alert(isEn ? "New slot created successfully." : "신규 슬롯이 생성되었습니다.");
       router.refresh();
     } finally { setIsPending(false); }
@@ -371,6 +432,15 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     if (selectedDateTime < new Date()) {
       alert(isEn ? "🚨 Cannot update to past time." : "🚨 과거 시간으로 수정할 수 없습니다.");
       return;
+    }
+    // ── 온라인 TBA 처리 (신규) ──
+    if (editMeetingType === 'online') {
+      if (editLinkTba) {
+        formData.set("location", TBA_VALUE);
+      } else {
+        const rawLocation = formData.get("location") as string;
+        formData.set("location", normalizeUrl(rawLocation));
+      }
     }
     if (!confirm(isEn ? "Update this reservation?" : "해당 예약을 수정하시겠습니까?")) return;
     setIsPending(true);
@@ -484,6 +554,45 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
       </button>
     </div>
   );
+
+  // ─── 미팅 타입 토글 컴포넌트 (슬롯 생성/수정 공통) ───
+  const MeetingTypeToggle = ({
+    meetingType,
+    setMeetingType,
+    disabled = false,
+  }: {
+    meetingType: 'offline' | 'online';
+    setMeetingType: (t: 'offline' | 'online') => void;
+    disabled?: boolean;
+  }) => (
+    <div className={`flex bg-slate-100 p-1 rounded-[16px] shadow-inner w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setMeetingType('offline')}
+        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[12px] text-xs font-black transition-all ${meetingType === 'offline' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        <MapPinned size={14} className={meetingType === 'offline' ? 'text-indigo-500' : ''}/>
+        {isEn ? "Offline (In-person)" : "오프라인 (대면)"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setMeetingType('online')}
+        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[12px] text-xs font-black transition-all ${meetingType === 'online' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        <Video size={14} className={meetingType === 'online' ? 'text-emerald-500' : ''}/>
+        {isEn ? "Online (Video)" : "온라인 (화상)"}
+      </button>
+    </div>
+  );
+
+  // ─── [CHANGE 1] 필수 표시: 빨간 점 컴포넌트 (REQUIRED 뱃지 대체) ───
+  const RequiredDot = () => (
+    <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 ml-1.5 mb-0.5 shrink-0" aria-label="required" />
+  );
+
+  // ─── [CHANGE 1] 이전 RequiredBadge / OptionalBadge 제거 → 하위 호환을 위해 빈 컴포넌트로 유지하지 않고 모두 RequiredDot으로 교체
+  // OptionalBadge는 완전히 제거 (렌더링하지 않음)
+  const OptionalBadge = () => null;
 
   const navItems = [
     { id: 'directory', label: t.buyer.nav.directory, sub: 'EXPLORE', icon: <Search size={22}/>, isAlert: alerts.directory, count: uniqueSellers.length },
@@ -883,7 +992,17 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                           </td>
                           <td className="px-5 md:px-6 py-4"><span className="text-sm font-black text-slate-700 whitespace-nowrap">{formatDateWithDay(m.timeSlot.startTime)}</span></td>
                           <td className="px-5 md:px-6 py-4"><span className="text-sm font-bold text-indigo-600 whitespace-nowrap">{formatTime24And12(m.timeSlot.startTime)}</span></td>
-                          <td className="px-5 md:px-6 py-4"><span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{m.location || t.buyer.confirmed.location}</span></td>
+                          <td className="px-5 md:px-6 py-4">
+                            {m.location === TBA_VALUE ? (
+                              <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5 whitespace-nowrap"><Clock size={13} className="text-amber-400 shrink-0"/>{isEn ? "Link TBA" : "링크 추후 공지"}</span>
+                            ) : /^https?:\/\//i.test(m.location || '') ? (
+                              <a href={m.location} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap hover:underline">
+                                <Video size={13} className="text-emerald-500 shrink-0"/>{isEn ? "Online Link" : "온라인 링크"} <ExternalLink size={11}/>
+                              </a>
+                            ) : (
+                              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{m.location || t.buyer.confirmed.location}</span>
+                            )}
+                          </td>
                           <td className="px-5 md:px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 bg-slate-100 rounded-[10px] flex items-center justify-center text-slate-400 shrink-0"><Building2 size={16}/></div>
@@ -923,7 +1042,9 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                         <h3 className={`text-xl md:text-2xl font-black ${m.isPast ? 'text-slate-500' : 'text-slate-800'}`}>{formatDateWithDay(m.timeSlot.startTime)}</h3>
                         <p className={`text-lg md:text-xl font-bold mt-1 ${m.isPast ? 'text-slate-400' : 'text-indigo-600'}`}>{formatTime24And12(m.timeSlot.startTime)}</p>
                       </div>
-                      <div className={`w-12 h-12 rounded-2xl shadow-sm border flex items-center justify-center ${m.isPast ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-100 text-emerald-500'}`}><MapPin size={24}/></div>
+                      <div className={`w-12 h-12 rounded-2xl shadow-sm border flex items-center justify-center ${m.isPast ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-100 text-emerald-500'}`}>
+                        {m.location === TBA_VALUE ? <Clock size={24}/> : /^https?:\/\//i.test(m.location || '') ? <Video size={24}/> : <MapPin size={24}/>}
+                      </div>
                     </div>
                     <div className={`mt-auto p-5 rounded-[24px] border space-y-4 ${m.isPast ? 'bg-white border-slate-100 opacity-80' : 'bg-slate-50 border-slate-100'}`}>
                       <div>
@@ -939,7 +1060,15 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       </div>
                       <div className="border-t border-slate-200/60 pt-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Meeting Location</p>
-                        <p className={`text-sm font-bold ${m.isPast ? 'text-slate-500' : 'text-slate-700'}`}>{m.location || t.buyer.confirmed.location}</p>
+                        {m.location === TBA_VALUE ? (
+                          <p className={`text-sm font-bold flex items-center gap-1.5 ${m.isPast ? 'text-slate-400' : 'text-amber-600'}`}><Clock size={14}/> {isEn ? "Link to be announced" : "링크 추후 공지 예정"}</p>
+                        ) : /^https?:\/\//i.test(m.location || '') ? (
+                          <a href={m.location} target="_blank" rel="noopener noreferrer" className={`text-sm font-bold flex items-center gap-1.5 hover:underline ${m.isPast ? 'text-slate-500' : 'text-emerald-600'}`}>
+                            <Video size={14}/> {isEn ? "Join Online Meeting" : "온라인 미팅 참가"} <ExternalLink size={12}/>
+                          </a>
+                        ) : (
+                          <p className={`text-sm font-bold ${m.isPast ? 'text-slate-500' : 'text-slate-700'}`}>{m.location || t.buyer.confirmed.location}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1008,7 +1137,17 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                               </td>
                               <td className="px-5 py-4"><span className="text-sm font-black text-slate-700 whitespace-nowrap">{formatDateWithDay(slot.startTime)}</span></td>
                               <td className="px-5 py-4"><span className="text-sm font-bold text-indigo-600 whitespace-nowrap flex items-center gap-1.5"><Clock size={13} className="text-indigo-400"/>{formatTime24And12(slot.startTime)}</span></td>
-                              <td className="px-5 py-4"><span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{slot.location}</span></td>
+                              <td className="px-5 py-4">
+                                {slot.location === TBA_VALUE ? (
+                                  <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5 whitespace-nowrap"><Clock size={13} className="text-amber-400 shrink-0"/>{isEn ? "Link TBA" : "링크 추후 공지"}</span>
+                                ) : /^https?:\/\//i.test(slot.location || '') ? (
+                                  <a href={slot.location} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap hover:underline">
+                                    <Video size={13} className="text-emerald-500 shrink-0"/>{isEn ? "Online" : "온라인"} <ExternalLink size={11}/>
+                                  </a>
+                                ) : (
+                                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{slot.location}</span>
+                                )}
+                              </td>
                               <td colSpan={2} className="px-5 py-4"><span className="text-xs text-slate-400 font-bold flex items-center gap-1.5"><Inbox size={13}/> {t.buyer.pending.noRequests}</span></td>
                               <td className="px-5 py-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
@@ -1038,7 +1177,15 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                                   <td rowSpan={activeRequests.length} className="px-5 py-4 align-middle border-r border-slate-100"><span className="text-sm font-bold text-indigo-600 whitespace-nowrap flex items-center gap-1.5"><Clock size={13} className="text-indigo-400"/>{formatTime24And12(slot.startTime)}</span></td>
                                   <td rowSpan={activeRequests.length} className="px-5 py-4 align-middle border-r border-slate-100">
                                     <div className="flex flex-col gap-2">
-                                      <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{slot.location}</span>
+                                      {slot.location === TBA_VALUE ? (
+                                        <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5 whitespace-nowrap"><Clock size={13} className="text-amber-400 shrink-0"/>{isEn ? "Link TBA" : "링크 추후 공지"}</span>
+                                      ) : /^https?:\/\//i.test(slot.location || '') ? (
+                                        <a href={slot.location} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap hover:underline">
+                                          <Video size={13} className="text-emerald-500 shrink-0"/>{isEn ? "Online" : "온라인"} <ExternalLink size={11}/>
+                                        </a>
+                                      ) : (
+                                        <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap"><MapPin size={13} className="text-slate-400 shrink-0"/>{slot.location}</span>
+                                      )}
                                       {slot.status === 'OPEN' && (
                                         <div className="flex items-center gap-1 mt-1">
                                           <button onClick={() => setEditingSlot(slot)} className="p-1 text-slate-400 bg-white border border-slate-200 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-md transition-all"><Edit2 size={12}/></button>
@@ -1104,7 +1251,26 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">{formatDateWithDay(slot.startTime)}</h3>
                           <div className="flex items-center gap-2 mt-1.5"><Clock size={16} className="text-indigo-400"/><span className="text-sm md:text-base font-bold text-slate-600">{formatTime24And12(slot.startTime)}</span></div>
-                          <div className="flex items-center gap-2 mt-1"><MapPin size={16} className="text-slate-400"/><span className="text-xs md:text-sm font-semibold text-slate-500">{slot.location}</span></div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {slot.location === TBA_VALUE ? (
+                              <>
+                                <Clock size={16} className="text-amber-500"/>
+                                <span className="text-xs md:text-sm font-semibold text-amber-600">{isEn ? "Online Link TBA" : "온라인 링크 추후 공지"}</span>
+                              </>
+                            ) : /^https?:\/\//i.test(slot.location || '') ? (
+                              <>
+                                <Video size={16} className="text-emerald-500"/>
+                                <a href={slot.location} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm font-semibold text-emerald-600 hover:underline flex items-center gap-1">
+                                  {isEn ? "Online Meeting" : "온라인 미팅"} <ExternalLink size={11}/>
+                                </a>
+                              </>
+                            ) : (
+                              <>
+                                <MapPin size={16} className="text-slate-400"/>
+                                <span className="text-xs md:text-sm font-semibold text-slate-500">{slot.location}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                       {slot.status === 'OPEN' && (
@@ -1168,29 +1334,170 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                 <h2 className="text-2xl md:text-3xl font-black text-slate-900">{t.buyer.generator.title}</h2>
                 <p className="text-sm text-slate-400 font-bold mt-2 leading-relaxed">{t.buyer.generator.subtitle}</p>
               </div>
+
+              {/* [CHANGE 1] 필수/선택 범례: 빨간 점으로 교체, 설명 문구 제거 */}
+              <div className="flex items-center gap-2 mb-6 px-1">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                  {isEn ? "Required" : "필수 항목"}
+                </span>
+              </div>
+
               <form action={onCreate} className="space-y-5 md:space-y-6">
+                {/* ── 날짜 (필수) ── */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.dateLabel}</label>
-                  <input name="date" type="date" required min={todayString} className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none transition-all cursor-pointer"/>
+                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                    {t.buyer.generator.dateLabel}
+                    <RequiredDot />
+                  </label>
+                  <input
+                    name="date"
+                    type="date"
+                    required
+                    min={todayString}
+                    lang={isEn ? "en-US" : "ko-KR"}
+                    className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none transition-all cursor-pointer"
+                  />
                 </div>
+
+                {/* ── 시/분 (필수) ── */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.hourLabel}</label>
+                    <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                      {t.buyer.generator.hourLabel}
+                      <RequiredDot />
+                    </label>
                     <select name="hour" className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none appearance-none transition-all cursor-pointer">
                       {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{isEn ? "" : "시"}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.minuteLabel}</label>
+                    <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                      {t.buyer.generator.minuteLabel}
+                      <RequiredDot />
+                    </label>
                     <select name="minute" className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none appearance-none transition-all cursor-pointer">
                       <option value="00">00{isEn ? "" : "분"}</option><option value="30">30{isEn ? "" : "분"}</option>
                     </select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.locationLabel}</label>
-                  <input name="location" required placeholder={t.buyer.generator.locationPlaceholder} className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[20px] text-sm font-bold outline-none transition-all"/>
+
+                {/* ── 미팅 방식 (필수) ── */}
+                <div className="space-y-3">
+                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                    {isEn ? "Meeting Type" : "미팅 방식"}
+                    <RequiredDot />
+                  </label>
+                  <MeetingTypeToggle
+                    meetingType={createMeetingType}
+                    setMeetingType={(t) => {
+                      setCreateMeetingType(t);
+                      setCreateLinkTba(false);
+                      setCreateLocationValue("");
+                    }}
+                  />
                 </div>
+
+                {/* ── 장소 / 링크 입력 ── */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                    {createMeetingType === 'online'
+                      ? <><Video size={12} className="mr-1"/> {isEn ? "Meeting Link (Zoom, Meet, etc.)" : "화상회의 링크 (Zoom, Meet 등)"}</>
+                      : <><MapPinned size={12} className="mr-1"/> {t.buyer.generator.locationLabel}</>
+                    }
+                    <RequiredDot />
+                  </label>
+
+                  {createMeetingType === 'online' && (
+                    <label className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-[14px] cursor-pointer hover:bg-amber-100 transition-colors group">
+                      <div className="relative shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={createLinkTba}
+                          onChange={(e) => {
+                            setCreateLinkTba(e.target.checked);
+                            if (e.target.checked) setCreateLocationValue("");
+                          }}
+                          className="sr-only"
+                        />
+                        <div className={`w-9 h-5 rounded-full transition-colors ${createLinkTba ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${createLinkTba ? 'translate-x-4' : 'translate-x-0.5'}`}/>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-amber-700">{isEn ? "Announce link later (TBA)" : "링크 추후 공지 예정"}</p>
+                        <p className="text-[10px] font-bold text-amber-500 mt-0.5">{isEn ? "You can update the link later when confirmed." : "링크가 확정되면 나중에 수정할 수 있습니다."}</p>
+                      </div>
+                    </label>
+                  )}
+
+                  {!(createMeetingType === 'online' && createLinkTba) && (
+                    <div className="relative">
+                      <input
+                        name="location"
+                        required
+                        value={createLocationValue}
+                        onChange={e => setCreateLocationValue(e.target.value)}
+                        placeholder={
+                          createMeetingType === 'online'
+                            ? (isEn ? "zoom.us/j/... or meet.google.com/..." : "zoom.us/j/... 또는 meet.google.com/...")
+                            : t.buyer.generator.locationPlaceholder
+                        }
+                        className={`w-full pl-5 pr-5 p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:ring-2 rounded-[20px] text-sm font-bold outline-none transition-all ${
+                          createMeetingType === 'online'
+                            ? 'focus:border-emerald-400 focus:ring-emerald-100 border border-emerald-100'
+                            : 'focus:border-indigo-500 focus:ring-indigo-100'
+                        }`}
+                      />
+                    </div>
+                  )}
+
+                  {createMeetingType === 'online' && createLinkTba && (
+                    <input type="hidden" name="location" value={TBA_VALUE} />
+                  )}
+
+                  {createMeetingType === 'online' && !createLinkTba && createLocationValue && !/^https?:\/\//i.test(createLocationValue) && (
+                    <p className="text-[11px] text-emerald-500 font-bold ml-1 flex items-center gap-1">
+                      <Info size={11}/> {isEn ? "https:// will be added automatically." : "저장 시 https://가 자동으로 추가됩니다."}
+                    </p>
+                  )}
+                </div>
+
+                {/* ── 추가 요청 및 안내사항 (선택) ── */}
+                <div className="space-y-2 pt-1">
+                  <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                    {isEn ? "Additional Notes / Instructions" : "추가 요청 및 안내사항"}
+                    {/* [CHANGE 1] Optional 배지 제거 - 표시 안 함 */}
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      name="note"
+                      value={createNote}
+                      onChange={e => setCreateNote(e.target.value)}
+                      placeholder={
+                        isEn
+                          ? "e.g. Please bring business cards. Meeting room is on the 3rd floor, Room 301."
+                          : "예) 명함을 지참해 주세요. 3층 301호 회의실에서 진행됩니다."
+                      }
+                      rows={3}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-50 rounded-[20px] text-sm font-bold outline-none transition-all resize-none leading-relaxed text-slate-600 placeholder:text-slate-300"
+                    />
+                    {createNote.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCreateNote("")}
+                        className="absolute top-3 right-3 p-1 text-slate-300 hover:text-slate-500 transition-colors"
+                      >
+                        <X size={14}/>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 ml-1 flex items-center gap-1">
+                    <Info size={10} className="text-slate-300"/>
+                    {isEn ? "This message will be shown to sellers who apply for this slot." : "이 내용은 미팅 신청 기업들에게 안내됩니다."}
+                  </p>
+                </div>
+
                 <button disabled={isPending} className="w-full py-5 md:py-6 bg-slate-900 text-white rounded-[20px] md:rounded-[25px] font-black text-base md:text-lg shadow-xl hover:bg-indigo-600 transition-all active:scale-[0.98] mt-4 flex justify-center items-center gap-2">
                   {isPending ? <Clock className="animate-spin" size={20}/> : <Plus size={20}/>}
                   {isPending ? t.buyer.generator.creating : t.buyer.generator.submitBtn}
@@ -1264,7 +1571,11 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   <div className="overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
                       <h3 className="text-lg md:text-2xl font-black text-slate-800 truncate">
-                        [{isEn ? (user.companyNameEn || user.companyName) : user.companyName}] {isEn ? (user.nameEn || user.name) : user.name}{isEn ? "" : " 님"}
+                        {/* [CHANGE 2] 영어 사용자에게는 영문 회사명만 표시, 한국어는 기존 유지 */}
+                        {isEn
+                          ? `[${user.companyNameEn || user.companyName}] ${user.nameEn || user.name}`
+                          : `[${user.companyName}] ${user.name} 님`
+                        }
                       </h3>
                       {user.isMaster
                         ? <span className="w-fit px-2.5 py-1 bg-indigo-600 text-white text-[9px] md:text-[10px] font-black rounded-md flex items-center gap-1 shadow-md shadow-indigo-100"><ShieldCheck size={12}/> MASTER</span>
@@ -1292,7 +1603,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       <input defaultValue={user.email} disabled className="w-full p-3.5 md:p-4 rounded-[16px] md:rounded-2xl border text-sm font-bold bg-slate-100 border-transparent text-slate-400 cursor-not-allowed"/>
                       <input type="hidden" name="email" value={user.email}/>
                     </div>
-                    {/* 성함 (한글) */}
+                    {/* 성함 (한글) - [CHANGE 2] 영어 사용자에게는 "Full Name (KR)" 레이블로만 표시 */}
                     <div className="flex flex-col space-y-2">
                       <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><UserIcon size={12}/> {isEn ? "Full Name (KR)" : "성함 (한글)"}</p>
                       <input name="name" defaultValue={user.name} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
@@ -1347,10 +1658,24 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Lightbulb size={12}/> {t.buyer.profile.preferredLabel}</p>
                       <textarea name="preferredPartners" defaultValue={user.preferredPartners} placeholder={t.register.preferredPartnersPlaceholder} className="w-full p-4 md:p-5 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[20px] md:rounded-3xl border h-28 md:h-32 text-sm md:text-base font-bold resize-none leading-relaxed transition-all"/>
                     </div>
-                    {/* LinkedIn */}
+                    {/* [CHANGE 3] LinkedIn - http 자동 추가, www. 입력도 처리 */}
                     <div className="flex flex-col space-y-2 md:col-span-2">
                       <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Globe size={12}/> LinkedIn</p>
-                      <input name="linkedinUrl" defaultValue={user.linkedinUrl} placeholder="https://linkedin.com/in/..." className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"/>
+                      <div className="relative">
+                        <input
+                          name="linkedinUrl"
+                          value={editLinkedinUrl}
+                          onChange={e => setEditLinkedinUrl(e.target.value)}
+                          onBlur={handleLinkedinBlur}
+                          placeholder="https://linkedin.com/in/... or linkedin.com/in/..."
+                          className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] md:rounded-2xl border text-sm md:text-base font-bold transition-all"
+                        />
+                        {editLinkedinUrl && !/^https?:\/\//i.test(editLinkedinUrl) && editLinkedinUrl.trim() !== '' && (
+                          <p className="text-[10px] font-bold text-indigo-400 mt-1 flex items-center gap-1 ml-1">
+                            <Info size={10}/> {isEn ? "https:// will be added automatically on save." : "포커스 이동 시 https://가 자동으로 추가됩니다."}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1362,22 +1687,54 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       <Building2 size={14}/> {isEn ? "Company Info — Master Only" : "회사 공통 정보 (마스터 전용)"}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-                      <div className="flex flex-col space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Company (KR)" : "회사명 (한글)"}</p>
-                        <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Company (EN)" : "회사명 (영문)"}</p>
-                        <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "CEO (KR)" : "대표자 (한글)"}</p>
-                        <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "CEO (EN)" : "대표자 (영문)"}</p>
-                        <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
-                      </div>
+                      {/* [CHANGE 2] 영어 사용자에게는 한글 회사명 필드를 숨기고 영문 회사명을 먼저 표시 */}
+                      {isEn ? (
+                        <>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Company (EN)" : "회사명 (영문)"}</p>
+                            <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Company (KR) <span className="text-slate-300 normal-case font-medium text-[9px]">— for Korean records</span></p>
+                            <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">회사명 (한글)</p>
+                            <input name="companyName" defaultValue={user.companyName} required className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">회사명 (영문)</p>
+                            <input name="companyNameEn" defaultValue={user.companyNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                        </>
+                      )}
+                      {/* [CHANGE 2] CEO 이름 - 영어 사용자는 영문 CEO 먼저 */}
+                      {isEn ? (
+                        <>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CEO (EN)</p>
+                            <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CEO (KR) <span className="text-slate-300 normal-case font-medium text-[9px]">— for Korean records</span></p>
+                            <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표자 (한글)</p>
+                            <input name="ceoNameKo" defaultValue={user.ceoNameKo} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표자 (영문)</p>
+                            <input name="ceoNameEn" defaultValue={user.ceoNameEn} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                          </div>
+                        </>
+                      )}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Industry Sector" : "산업 분야"}</p>
                         <input name="industrySector" defaultValue={user.industrySector || user.onePager?.industrySector} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
@@ -1417,8 +1774,8 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
       {/* ── 예약 수정 모달 ── */}
       {editingSlot && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 md:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in zoom-in-95">
-          <div className="bg-white w-full max-w-lg rounded-[32px] md:rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border border-white/20">
-            <div className="bg-indigo-600 px-6 md:px-8 py-5 md:py-6 flex justify-between items-center text-white relative overflow-hidden">
+          <div className="bg-white w-full max-w-lg rounded-[32px] md:rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border border-white/20 max-h-[92vh] overflow-y-auto">
+            <div className="bg-indigo-600 px-6 md:px-8 py-5 md:py-6 flex justify-between items-center text-white relative overflow-hidden sticky top-0 z-10">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
               <div className="relative z-10">
                 <h3 className="text-lg md:text-xl font-black flex items-center gap-2"><Edit2 size={20}/> {isEn ? "Edit Slot Date / Location" : "예약 일정/장소 수정"}</h3>
@@ -1440,33 +1797,155 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                       {hasRequests && (
                         <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-sm text-amber-700 flex gap-2.5 items-start leading-relaxed shadow-sm">
                           <AlertCircle size={18} className="shrink-0 mt-0.5"/>
-                          <p>{isEn ? "Only location can be modified because there are pending requests." : "미팅 신청 기업이 있어 장소만 변경 가능합니다."}</p>
+                          <p>{isEn ? "Only location / link can be modified because there are pending requests." : "미팅 신청 기업이 있어 장소/링크만 변경 가능합니다."}</p>
                         </div>
                       )}
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.buyer.generator.dateLabel}</label>
-                        <input name="date" type="date" required defaultValue={defaultDate} min={todayString} readOnly={hasRequests} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed focus:ring-0' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 cursor-pointer'}`}/>
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center">
+                          {t.buyer.generator.dateLabel}
+                          {!hasRequests && <RequiredDot />}
+                        </label>
+                        <input name="date" type="date" required defaultValue={defaultDate} min={todayString} readOnly={hasRequests} lang={isEn ? "en-US" : "ko-KR"} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed focus:ring-0' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 cursor-pointer'}`}/>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.buyer.generator.hourLabel}</label>
+                          <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center">
+                            {t.buyer.generator.hourLabel}
+                            {!hasRequests && <RequiredDot />}
+                          </label>
                           <select name="hour" defaultValue={defaultHour} disabled={hasRequests} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none appearance-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 cursor-pointer'}`}>
                             {Array.from({length:24}).map((_,i) => <option key={i} value={String(i).padStart(2,'0')}>{i}{isEn ? "" : "시"}</option>)}
                           </select>
                           {hasRequests && <input type="hidden" name="hour" value={defaultHour}/>}
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.buyer.generator.minuteLabel}</label>
+                          <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center">
+                            {t.buyer.generator.minuteLabel}
+                            {!hasRequests && <RequiredDot />}
+                          </label>
                           <select name="minute" defaultValue={defaultMinute} disabled={hasRequests} className={`w-full p-4 rounded-[16px] text-sm font-bold outline-none appearance-none transition-all ${hasRequests ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 cursor-pointer'}`}>
                             <option value="00">00{isEn ? "" : "분"}</option><option value="30">30{isEn ? "" : "분"}</option>
                           </select>
                           {hasRequests && <input type="hidden" name="minute" value={defaultMinute}/>}
                         </div>
                       </div>
-                      <div className="space-y-1.5 pt-1">
-                        <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1">{t.buyer.generator.locationLabel}</label>
-                        <input name="location" required defaultValue={editingSlot.location} placeholder={isEn ? "Location or Online" : "장소 혹은 온라인 여부"} className="w-full p-4 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-[16px] text-sm font-bold outline-none transition-all"/>
+
+                      {/* ── 온라인/오프라인 선택 (수정 모달) ── */}
+                      <div className="space-y-2 pt-1">
+                        <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                          {isEn ? "Meeting Type" : "미팅 방식"}
+                          <RequiredDot />
+                        </label>
+                        <MeetingTypeToggle
+                          meetingType={editMeetingType}
+                          setMeetingType={(t) => {
+                            setEditMeetingType(t);
+                            setEditLinkTba(false);
+                            setEditLocationValue("");
+                          }}
+                        />
                       </div>
+
+                      {/* ── 장소 / 링크 입력 (수정 모달) ── */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                          {editMeetingType === 'online'
+                            ? <><Video size={12} className="mr-1"/> {isEn ? "Meeting Link (Zoom, Meet, etc.)" : "화상회의 링크 (Zoom, Meet 등)"}</>
+                            : <><MapPinned size={12} className="mr-1"/> {t.buyer.generator.locationLabel}</>
+                          }
+                          <RequiredDot />
+                        </label>
+
+                        {editMeetingType === 'online' && (
+                          <label className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-[14px] cursor-pointer hover:bg-amber-100 transition-colors group">
+                            <div className="relative shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={editLinkTba}
+                                onChange={(e) => {
+                                  setEditLinkTba(e.target.checked);
+                                  if (e.target.checked) setEditLocationValue("");
+                                }}
+                                className="sr-only"
+                              />
+                              <div className={`w-9 h-5 rounded-full transition-colors ${editLinkTba ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editLinkTba ? 'translate-x-4' : 'translate-x-0.5'}`}/>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-amber-700">{isEn ? "Announce link later (TBA)" : "링크 추후 공지 예정"}</p>
+                              <p className="text-[10px] font-bold text-amber-500 mt-0.5">{isEn ? "You can update the link later when confirmed." : "링크가 확정되면 나중에 수정할 수 있습니다."}</p>
+                            </div>
+                          </label>
+                        )}
+
+                        {!(editMeetingType === 'online' && editLinkTba) && (
+                          <div className="relative">
+                            <input
+                              name="location"
+                              required
+                              value={editLocationValue}
+                              onChange={e => setEditLocationValue(e.target.value)}
+                              placeholder={
+                                editMeetingType === 'online'
+                                  ? (isEn ? "zoom.us/j/... or meet.google.com/..." : "zoom.us/j/... 또는 meet.google.com/...")
+                                  : (isEn ? "Location or Online" : "장소 혹은 온라인 여부")
+                              }
+                              className={`w-full pl-4 pr-4 p-4 rounded-[16px] text-sm font-bold outline-none transition-all ${
+                                editMeetingType === 'online'
+                                  ? 'bg-emerald-50 border border-emerald-200 focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100'
+                                  : 'bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100'
+                              }`}
+                            />
+                          </div>
+                        )}
+
+                        {editMeetingType === 'online' && editLinkTba && (
+                          <input type="hidden" name="location" value={TBA_VALUE} />
+                        )}
+
+                        {editMeetingType === 'online' && !editLinkTba && editLocationValue && !/^https?:\/\//i.test(editLocationValue) && (
+                          <p className="text-[11px] text-emerald-500 font-bold ml-1 flex items-center gap-1">
+                            <Info size={11}/> {isEn ? "https:// will be added automatically." : "저장 시 https://가 자동으로 추가됩니다."}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ── 추가 요청 및 안내사항 (수정 모달 / 선택) ── */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[11px] font-black text-indigo-500 uppercase tracking-widest ml-1 flex items-center">
+                          {isEn ? "Additional Notes / Instructions" : "추가 요청 및 안내사항"}
+                          {/* [CHANGE 1] Optional 배지 제거 */}
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            name="note"
+                            value={editNote}
+                            onChange={e => setEditNote(e.target.value)}
+                            placeholder={
+                              isEn
+                                ? "e.g. Please bring business cards. Meeting room is on the 3rd floor, Room 301."
+                                : "예) 명함을 지참해 주세요. 3층 301호 회의실에서 진행됩니다."
+                            }
+                            rows={3}
+                            className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-50 rounded-[16px] text-sm font-bold outline-none transition-all resize-none leading-relaxed text-slate-600 placeholder:text-slate-300"
+                          />
+                          {editNote.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setEditNote("")}
+                              className="absolute top-3 right-3 p-1 text-slate-300 hover:text-slate-500 transition-colors"
+                            >
+                              <X size={14}/>
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 ml-1 flex items-center gap-1">
+                          <Info size={10} className="text-slate-300"/>
+                          {isEn ? "This message will be shown to sellers who apply for this slot." : "이 내용은 미팅 신청 기업들에게 안내됩니다."}
+                        </p>
+                      </div>
+
                       <button disabled={isPending} className="w-full py-4 bg-slate-900 text-white rounded-[16px] font-black text-base hover:bg-indigo-600 transition-all active:scale-[0.98] mt-4 flex justify-center items-center gap-2">
                         {isPending ? t.common.loading : <><Save size={18}/> {isEn ? "Update Changes" : "수정 완료"}</>}
                       </button>

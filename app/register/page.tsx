@@ -271,11 +271,12 @@ export default function RegisterPage() {
   const industries = isKorean ? INDUSTRY_CATEGORIES_KO : INDUSTRY_CATEGORIES_EN;
   const othersValue = isKorean ? "기타 (Others)" : "Others";
 
+  // 옵셔널 체이닝(?.)을 추가하여 타입스크립트 에러 안전하게 방어
   const filteredCountries = COUNTRY_CODES.filter(c =>
-    c.name.includes(countrySearchQuery) ||
-    c.nameEn.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
-    c.iso.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
-    c.code.includes(countrySearchQuery)
+    c.name?.includes(countrySearchQuery) ||
+    c.nameEn?.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
+    c.iso?.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
+    c.code?.includes(countrySearchQuery)
   );
 
   // 이메일 중복 확인
@@ -489,7 +490,7 @@ export default function RegisterPage() {
           if (emailStatus !== "available") { setError(r.emailInvalid); return; }
           if (!privacyConsent) { setError(r.privacyConsentLabel); return; }
 
-          // ─── [수정됨] SELLER(셀러) 일 경우 원페이저 필수값 제출 방어 로직 추가 ───
+          // ─── SELLER(셀러) 일 경우 원페이저 필수값 제출 방어 로직 추가 ───
           if (role === "SELLER") {
             const finalInd = industrySector === othersValue ? customIndustry : industrySector;
             if (!finalInd) { setError(locale === "ko" ? "산업 분야를 선택해주세요." : "Please select an industry sector."); return; }
@@ -508,23 +509,27 @@ export default function RegisterPage() {
           formData.set("jobTitleEn", jobTitleEn);
           formData.set("linkedinUrl", linkedinUrl);
 
-          // ─── [수정됨] 비즈니스 정보 전송 (원페이저용) ───
+          // ─── 비즈니스 정보 전송 (원페이저용) ───
           const finalIndustry = industrySector === othersValue ? customIndustry : industrySector;
           formData.set("industrySector", finalIndustry);
           formData.set("primaryTech", primaryTech);
           formData.set("investmentStage", investmentStage);
           formData.set("yearFounded", yearFounded);
 
-          // 해외 사용자: 한글 필드에 영문값 복사
+          // ─── 해외 사용자: 한글 필드에 영문값 복사 & 대표자명 처리 ───
           if (!isKorean) {
             formData.set("name", name);       
             formData.set("jobTitle", jobTitle); 
+            // 해외일 경우 대표자명(영문)을 한글(기본) 필드에도 채워줌
+            formData.set("ceoNameKo", ceoNameEn);
+          } else {
+            // 한국일 경우 사용자가 입력한 한글/영문 대표자명 세팅
+            formData.set("ceoNameKo", ceoNameKo);
           }
+          formData.set("ceoNameEn", ceoNameEn);
 
           if (isMasterFlow) {
             formData.set("companyNameEn", companyNameEn);
-            formData.set("ceoNameKo", ceoNameKo);
-            formData.set("ceoNameEn", ceoNameEn);
           }
           if (isRoleLocked) {
             formData.set("role", role);
@@ -733,6 +738,21 @@ export default function RegisterPage() {
                               setCompanyChecked(true);
                               if (comp.role) { setRole(comp.role); setIsRoleLocked(true); }
                               if (comp.businessNumber) setBusinessNumber(comp.businessNumber);
+
+                              // ─── [수정] 비즈니스 정보 자동 채우기 ───
+                              const ind = comp.onePager?.industrySector || comp.industrySector || "";
+                              if (ind) {
+                                if (industries.includes(ind)) {
+                                  setIndustrySector(ind);
+                                  setCustomIndustry("");
+                                } else {
+                                  setIndustrySector(othersValue);
+                                  setCustomIndustry(ind);
+                                }
+                              }
+                              setPrimaryTech(comp.onePager?.primaryTech || comp.primaryTech || "");
+                              setInvestmentStage(comp.onePager?.investmentStage || comp.investmentStage || "");
+                              setYearFounded(comp.onePager?.yearFounded || comp.yearFounded || "");
                             }}
                             className="flex justify-between items-center p-3 hover:bg-blue-50 rounded-2xl border border-slate-100 transition-all text-left group"
                           >
@@ -779,68 +799,143 @@ export default function RegisterPage() {
                     }`}
                   />
                 </div>
+
+                {/* 대표자명 (한글) */}
+                <div className="col-span-1">
+                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                    {r.ceoNameKoLabel || (locale === "ko" ? "대표자명 (한글)" : "CEO Name (Korean)")} {isMasterFlow && <span className="text-rose-500">*</span>}
+                  </label>
+                  <input
+                    name="ceoNameKo"
+                    value={ceoNameKo} onChange={(e) => setCeoNameKo(e.target.value)}
+                    placeholder={locale === "ko" ? "대표자 한글명" : "CEO Name (Korean)"}
+                    required={isMasterFlow}
+                    disabled={isSameCompanyConfirmed}
+                    className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none transition-colors text-sm sm:text-base ${
+                      isSameCompanyConfirmed
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-200 focus:border-blue-500 focus:bg-white'
+                    }`}
+                  />
+                </div>
+
+                {/* 대표자명 (영문) */}
+                <div className="col-span-1">
+                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                    {r.ceoNameEnLabel || (locale === "ko" ? "대표자명 (영문)" : "CEO Name (English)")} {isMasterFlow && <span className="text-rose-500">*</span>}
+                  </label>
+                  <input
+                    name="ceoNameEn"
+                    value={ceoNameEn} onChange={(e) => setCeoNameEn(e.target.value)}
+                    placeholder={locale === "ko" ? "대표자 영문명" : "CEO Name (English)"}
+                    required={isMasterFlow}
+                    disabled={isSameCompanyConfirmed}
+                    className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none transition-colors text-sm sm:text-base ${
+                      isSameCompanyConfirmed
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-200 focus:border-blue-500 focus:bg-white'
+                    }`}
+                  />
+                </div>
               </>
             ) : (
               /* 해외 국가: 영문 단일 입력 */
-              <div className="col-span-1 sm:col-span-2 relative">
-                <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
-                  {locale === "ko" ? "회사명 (영문)" : "Company Name"} <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  name="companyName" required value={companyName}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setCompanyName(v);
-                    setCompanyNameEn(v);
-                    setIsSameCompanyConfirmed(false);
-                    setIsRoleLocked(false);
-                    setIsMasterFlow(false);
-                    setCompanyChecked(false);
-                  }}
-                  placeholder="Enter company name in English"
-                  className={`w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border focus:bg-white transition-colors focus:outline-none text-sm sm:text-base ${
-                    isSameCompanyConfirmed ? 'border-emerald-500' : 'border-slate-200 focus:border-blue-500'
-                  }`}
-                />
-                <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">
-                  {locale === "ko"
-                    ? `${selectedCountry.flag} ${selectedCountry.nameEn} 선택됨 — 영문으로 입력해주세요`
-                    : `${selectedCountry.flag} ${selectedCountry.nameEn} selected — please enter in English`}
-                </p>
-                {isSameCompanyConfirmed && (
-                  <p className="text-[10px] text-emerald-600 font-black mt-1 ml-2">{r.companyConfirmed}</p>
-                )}
-                {/* 유사 회사 드롭다운 (해외도 동일) */}
-                {similarCompanies.length > 0 && !isSameCompanyConfirmed && (
-                  <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl p-4 space-y-3">
-                    <p className="text-xs font-black text-slate-500">{r.similarCompaniesTitle}</p>
-                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                      {similarCompanies.map((comp) => (
-                        <button
-                          key={comp.companyName} type="button"
-                          onClick={() => {
-                            setCompanyName(comp.companyName);
-                            setCompanyNameEn(comp.companyNameEn || comp.companyName);
-                            setIsSameCompanyConfirmed(true);
-                            setIsMasterFlow(false);
-                            setSimilarCompanies([]);
-                            setCompanyChecked(true);
-                            if (comp.role) { setRole(comp.role); setIsRoleLocked(true); }
-                            if (comp.businessNumber) setBusinessNumber(comp.businessNumber);
-                          }}
-                          className="flex justify-between items-center p-3 hover:bg-blue-50 rounded-2xl border border-slate-100 transition-all text-left group"
-                        >
-                          <div className="min-w-0 flex-1 mr-2">
-                            <span className="font-black text-sm text-slate-800 group-hover:text-blue-700">{comp.companyName}</span>
-                            {comp.companyNameEn && <span className="ml-1.5 text-xs text-slate-400">({comp.companyNameEn})</span>}
-                          </div>
-                          <span className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded-xl shrink-0">{r.selectButton}</span>
-                        </button>
-                      ))}
+              <>
+                {/* 해외: 영문 회사명 */}
+                <div className="col-span-1 sm:col-span-2 relative">
+                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                    {locale === "ko" ? "회사명 (영문)" : "Company Name"} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    name="companyName" required value={companyName}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCompanyName(v);
+                      setCompanyNameEn(v);
+                      setIsSameCompanyConfirmed(false);
+                      setIsRoleLocked(false);
+                      setIsMasterFlow(false);
+                      setCompanyChecked(false);
+                    }}
+                    placeholder="Enter company name in English"
+                    className={`w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border focus:bg-white transition-colors focus:outline-none text-sm sm:text-base ${
+                      isSameCompanyConfirmed ? 'border-emerald-500' : 'border-slate-200 focus:border-blue-500'
+                    }`}
+                  />
+                  <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">
+                    {locale === "ko"
+                      ? `${selectedCountry.flag} ${selectedCountry.nameEn} 선택됨 — 영문으로 입력해주세요`
+                      : `${selectedCountry.flag} ${selectedCountry.nameEn} selected — please enter in English`}
+                  </p>
+                  {isSameCompanyConfirmed && (
+                    <p className="text-[10px] text-emerald-600 font-black mt-1 ml-2">{r.companyConfirmed}</p>
+                  )}
+                  {/* 유사 회사 드롭다운 (해외도 동일) */}
+                  {similarCompanies.length > 0 && !isSameCompanyConfirmed && (
+                    <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl p-4 space-y-3">
+                      <p className="text-xs font-black text-slate-500">{r.similarCompaniesTitle}</p>
+                      <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                        {similarCompanies.map((comp) => (
+                          <button
+                            key={comp.companyName} type="button"
+                            onClick={() => {
+                              setCompanyName(comp.companyName);
+                              setCompanyNameEn(comp.companyNameEn || comp.companyName);
+                              setIsSameCompanyConfirmed(true);
+                              setIsMasterFlow(false);
+                              setSimilarCompanies([]);
+                              setCompanyChecked(true);
+                              if (comp.role) { setRole(comp.role); setIsRoleLocked(true); }
+                              if (comp.businessNumber) setBusinessNumber(comp.businessNumber);
+
+                              // ─── [수정] 비즈니스 정보 자동 채우기 ───
+                              const ind = comp.onePager?.industrySector || comp.industrySector || "";
+                              if (ind) {
+                                if (industries.includes(ind)) {
+                                  setIndustrySector(ind);
+                                  setCustomIndustry("");
+                                } else {
+                                  setIndustrySector(othersValue);
+                                  setCustomIndustry(ind);
+                                }
+                              }
+                              setPrimaryTech(comp.onePager?.primaryTech || comp.primaryTech || "");
+                              setInvestmentStage(comp.onePager?.investmentStage || comp.investmentStage || "");
+                              setYearFounded(comp.onePager?.yearFounded || comp.yearFounded || "");
+                            }}
+                            className="flex justify-between items-center p-3 hover:bg-blue-50 rounded-2xl border border-slate-100 transition-all text-left group"
+                          >
+                            <div className="min-w-0 flex-1 mr-2">
+                              <span className="font-black text-sm text-slate-800 group-hover:text-blue-700">{comp.companyName}</span>
+                              {comp.companyNameEn && <span className="ml-1.5 text-xs text-slate-400">({comp.companyNameEn})</span>}
+                            </div>
+                            <span className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded-xl shrink-0">{r.selectButton}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+
+                {/* 해외: 대표자명 (영문) */}
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                    {r.ceoNameEnLabel || (locale === "ko" ? "대표자명 (영문)" : "CEO Name")} {isMasterFlow && <span className="text-rose-500">*</span>}
+                  </label>
+                  <input
+                    name="ceoNameEn"
+                    value={ceoNameEn} onChange={(e) => { setCeoNameEn(e.target.value); setCeoNameKo(e.target.value); }}
+                    placeholder="CEO / Representative Name"
+                    required={isMasterFlow}
+                    disabled={isSameCompanyConfirmed}
+                    className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none transition-colors text-sm sm:text-base ${
+                      isSameCompanyConfirmed
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-200 focus:border-blue-500 focus:bg-white'
+                    }`}
+                  />
+                </div>
+              </>
             )}
 
             {/* 사업자등록번호 */}
@@ -880,59 +975,19 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* 마스터 전용 필드 */}
+            {/* 마스터 전용 필드 안내 */}
             {isMasterFlow && (
-              <>
-                <div className="col-span-1 sm:col-span-2">
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-                    <span className="text-lg shrink-0">👑</span>
-                    <div>
-                      <p className="text-xs font-black text-amber-700">{r.masterBadgeTitle}</p>
-                      <p className="text-[10px] text-amber-600 mt-0.5">{r.masterBadgeDesc}</p>
-                    </div>
+              <div className="col-span-1 sm:col-span-2">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+                  <span className="text-lg shrink-0">👑</span>
+                  <div>
+                    <p className="text-xs font-black text-amber-700">{r.masterBadgeTitle}</p>
+                    <p className="text-[10px] text-amber-600 mt-0.5">{r.masterBadgeDesc}</p>
                   </div>
                 </div>
-
-                {isKorean ? (
-                  <>
-                    <div className="col-span-1">
-                      <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
-                        {r.ceoNameKoLabel} <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        value={ceoNameKo} onChange={(e) => setCeoNameKo(e.target.value)}
-                        placeholder={locale === "ko" ? "대표자 한글명" : "CEO Name (Korean)"}
-                        required
-                        className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none focus:bg-white transition-colors text-sm sm:text-base"
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
-                        {r.ceoNameEnLabel} <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        value={ceoNameEn} onChange={(e) => setCeoNameEn(e.target.value)}
-                        placeholder={locale === "ko" ? "대표자 영문명" : "CEO Name (English)"}
-                        required
-                        className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none focus:bg-white transition-colors text-sm sm:text-base"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
-                      {r.ceoNameEnLabel} <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      value={ceoNameEn} onChange={(e) => { setCeoNameEn(e.target.value); setCeoNameKo(e.target.value); }}
-                      placeholder="CEO / Representative Name"
-                      required
-                      className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none focus:bg-white transition-colors text-sm sm:text-base"
-                    />
-                  </div>
-                )}
-              </>
+              </div>
             )}
+
           </div>
         </div>
 
@@ -1053,7 +1108,6 @@ export default function RegisterPage() {
                 <div className="absolute left-3.5 sm:left-4 flex items-center justify-center w-6 h-6 bg-[#0A66C2] rounded text-white font-bold text-[13px] pointer-events-none shadow-sm z-10">
                   in
                 </div>
-                {/* [수정됨] pl-14 sm:pl-16 으로 좌측 여백을 충분히 늘려 텍스트가 아이콘과 절대 겹치지 않게 함 */}
                 <input
                   name="linkedinUrl" type="url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
                   placeholder="https://www.linkedin.com/in/yourprofile"
@@ -1114,6 +1168,7 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {/* ─── [수정됨] 마스터 정보로 연동 시 비활성화(disabled) 적용 ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 pt-6 border-t border-slate-200">
             <div className="col-span-1 sm:col-span-2">
               <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
@@ -1125,7 +1180,12 @@ export default function RegisterPage() {
                   required={role === "SELLER"}
                   value={industrySector} 
                   onChange={(e) => setIndustrySector(e.target.value)} 
-                  className="w-full px-4 py-3 sm:p-4 pr-10 bg-white rounded-2xl border border-slate-200 outline-none focus:border-blue-500 text-sm sm:text-base appearance-none cursor-pointer"
+                  disabled={isSameCompanyConfirmed}
+                  className={`w-full px-4 py-3 sm:p-4 pr-10 rounded-2xl border outline-none text-sm sm:text-base appearance-none ${
+                    isSameCompanyConfirmed
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                      : 'bg-white border-slate-200 focus:border-blue-500 cursor-pointer'
+                  }`}
                 >
                   <option value="" disabled className="text-slate-400">Select Category</option>
                   {industries.map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -1141,7 +1201,12 @@ export default function RegisterPage() {
                   type="text" placeholder={locale === "ko" ? "직접 입력해주세요" : "Enter custom industry"}
                   required={role === "SELLER"}
                   value={customIndustry} onChange={(e) => setCustomIndustry(e.target.value)}
-                  className="w-full mt-2 px-4 py-3 sm:p-4 bg-white border border-blue-200 rounded-2xl focus:border-blue-500 outline-none text-sm sm:text-base animate-in fade-in slide-in-from-top-1" 
+                  disabled={isSameCompanyConfirmed}
+                  className={`w-full mt-2 px-4 py-3 sm:p-4 rounded-2xl border outline-none text-sm sm:text-base animate-in fade-in slide-in-from-top-1 ${
+                    isSameCompanyConfirmed
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                      : 'bg-white border-blue-200 focus:border-blue-500'
+                  }`}
                 />
               )}
             </div>
@@ -1154,8 +1219,13 @@ export default function RegisterPage() {
               <input 
                 required={role === "SELLER"}
                 value={primaryTech} onChange={(e) => setPrimaryTech(e.target.value)}
+                disabled={isSameCompanyConfirmed}
                 placeholder="e.g. AI, Robotics"
-                className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none text-sm sm:text-base" 
+                className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none text-sm sm:text-base ${
+                  isSameCompanyConfirmed
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                    : 'bg-white border-slate-200 focus:border-blue-500'
+                }`}
               />
             </div>
             <div className="col-span-1">
@@ -1166,8 +1236,13 @@ export default function RegisterPage() {
               <input 
                 required={role === "SELLER"}
                 value={investmentStage} onChange={(e) => setInvestmentStage(e.target.value)}
+                disabled={isSameCompanyConfirmed}
                 placeholder="e.g. Seed, Series A"
-                className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none text-sm sm:text-base" 
+                className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none text-sm sm:text-base ${
+                  isSameCompanyConfirmed
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                    : 'bg-white border-slate-200 focus:border-blue-500'
+                }`}
               />
             </div>
             <div className="col-span-1 sm:col-span-2">
@@ -1178,8 +1253,13 @@ export default function RegisterPage() {
               <input 
                 required={role === "SELLER"}
                 value={yearFounded} onChange={(e) => setYearFounded(e.target.value)}
+                disabled={isSameCompanyConfirmed}
                 placeholder="e.g. 2024"
-                className="w-full px-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none text-sm sm:text-base" 
+                className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none text-sm sm:text-base ${
+                  isSameCompanyConfirmed
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                    : 'bg-white border-slate-200 focus:border-blue-500'
+                }`}
               />
             </div>
           </div>
