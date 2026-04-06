@@ -9,7 +9,9 @@ import {
   requestLocationChange, 
   createSlotAction, 
   updateSlotAction,
-  deleteSlotAction
+  deleteSlotAction,
+  handleMemberStatus,
+  transferMasterRole,
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import { 
@@ -18,7 +20,8 @@ import {
   BarChart3, ChevronRight, PieChart, UserCheck, Save, User as UserIcon, Calendar, Settings, Handshake, Globe, Award,
   CheckCircle2, AlertCircle, Info, Rocket, Bell, Check, XCircle, FileSearch, ArrowRight, Activity, Zap,
   Users, ShieldCheck, Edit2, Trash2, Inbox,
-  LayoutList, LayoutGrid, ExternalLink, Video, MapPinned, Link as LinkIcon
+  LayoutList, LayoutGrid, ExternalLink, Video, MapPinned, Link as LinkIcon,
+  Ban,
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import React from "react";
@@ -73,7 +76,16 @@ const normalizeUrl = (url: string): string => {
 // ─── 상수: 추후 공지 placeholder 값 ───
 const TBA_VALUE = "__TBA__";
 
-export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allSellers = [], buyerId, user }: any) {
+export default function BuyerClient({ 
+  mySlots = [], 
+  confirmedMeetings = [], 
+  allSellers = [], 
+  buyerId, 
+  user,
+  pendingMembers = [],
+  approvedMembers = [],
+  rejectedTeamMembers = [],
+}: any) {
   const { t, locale } = useI18n();
   const router = useRouter(); 
   const searchParams = useSearchParams();
@@ -181,6 +193,20 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     const time12 = d.toLocaleTimeString(dateLocale, { hour12: true, hour: '2-digit', minute: '2-digit' });
     return `${time24} (${time12})`;
   };
+
+  // ── 팀 관리: 승인된 멤버 정렬 (마스터 먼저, 이후 가입순) ──
+  const sortedApprovedMembers = useMemo(() => {
+    if (!approvedMembers) return [];
+    return [...approvedMembers].sort((a: any, b: any) => {
+      const isMasterA = a.id === user?.id;
+      const isMasterB = b.id === user?.id;
+      if (isMasterA && !isMasterB) return -1;
+      if (!isMasterA && isMasterB) return 1;
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeA - timeB;
+    });
+  }, [approvedMembers, user?.id]);
 
   useEffect(() => { 
     setMounted(true); 
@@ -594,7 +620,7 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
   // OptionalBadge는 완전히 제거 (렌더링하지 않음)
   const OptionalBadge = () => null;
 
-  const navItems = [
+  const navItems: any[] = [
     { id: 'directory', label: t.buyer.nav.directory, sub: 'EXPLORE', icon: <Search size={22}/>, isAlert: alerts.directory, count: uniqueSellers.length },
     { id: 'pending', label: t.buyer.nav.pending, sub: 'STATUS', icon: <Clock size={22}/>, isAlert: alerts.pending, count: totalPendingRequests > 0 ? totalPendingRequests : null },
     { id: 'confirmed', label: t.buyer.nav.confirmed, sub: 'CONFIRMED', icon: <Handshake size={22}/>, isAlert: alerts.confirmed, count: confirmedMeetings.length },
@@ -602,6 +628,18 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
     { id: 'analytics', label: t.buyer.nav.analytics, sub: 'INSIGHT', icon: <BarChart3 size={22}/>, isAlert: false, count: null },
     { id: 'profile', label: t.buyer.nav.profile, sub: 'PROFILE', icon: <Settings size={22}/>, isAlert: false, count: null },
   ];
+
+  // ── 마스터인 경우에만 팀 관리 메뉴 추가 ──
+  if (user.isMaster) {
+    navItems.push({
+      id: 'team',
+      label: isEn ? "Team" : "팀 관리",
+      sub: 'TEAM',
+      icon: <ShieldCheck size={22}/>,
+      isAlert: pendingMembers.length > 0,
+      count: pendingMembers.length > 0 ? pendingMembers.length : null,
+    });
+  }
 
   const aiAvgScore = aiResults.length > 0
     ? Math.round(aiResults.reduce((s: number, r: any) => s + (r.matchScore ?? 0), 0) / aiResults.length)
@@ -640,6 +678,27 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
               </div>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── 팀원 합류 대기 알림 배너 (마스터 전용) ── */}
+      {user.isMaster && pendingMembers.length > 0 && expandedSection !== 'team' && (
+        <div className="bg-indigo-600 text-white px-5 py-4 md:px-6 md:py-4 rounded-[24px] shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-4 w-full">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="bg-white/20 p-2.5 rounded-full shrink-0"><Users size={18} className="text-white" /></div>
+            <span className="font-bold text-xs md:text-sm leading-snug">
+              {isEn
+                ? <>Members awaiting approval <span className="text-indigo-200 font-black">{pendingMembers.length}</span></>
+                : <>조직 합류 대기 팀원 <span className="text-indigo-200 font-black">{pendingMembers.length}명</span></>
+              }
+            </span>
+          </div>
+          <button 
+            onClick={() => setExpandedSection('team')} 
+            className="w-full md:w-auto bg-white text-indigo-600 px-5 py-3 md:py-2.5 rounded-[16px] text-[13px] font-black hover:bg-indigo-50 transition-colors shadow-sm"
+          >
+            {isEn ? "Review & Approve" : "검토 및 승인하기"}
+          </button>
         </div>
       )}
 
@@ -1765,6 +1824,184 @@ export default function BuyerClient({ mySlots = [], confirmedMeetings = [], allS
                   {t.buyer.profile.saveBtn}
                 </button>
               </form>
+            </div>
+          </section>
+        )}
+
+        {/* ── [G] 팀 관리 (마스터 전용) ── */}
+        {expandedSection === 'team' && user.isMaster && (
+          <section className="bg-white p-5 md:p-12 rounded-[30px] md:rounded-[45px] shadow-xl border border-white animate-in fade-in duration-500 text-left w-full">
+            <div className="flex flex-col mb-8 md:mb-10 border-b border-slate-50 pb-6 md:pb-8">
+              <h3 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2 md:gap-3 flex-wrap">
+                <ShieldCheck className="text-indigo-600" size={28}/>
+                {isEn ? "Team Management" : "팀 관리"}
+                <span className="px-2 md:px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black rounded-md md:rounded-lg">Master Console</span>
+              </h3>
+              <p className="text-xs md:text-sm font-bold text-slate-400 mt-2 ml-1 leading-relaxed break-keep">
+                {isEn ? "Approve or reject members requesting to join the organization." : "조직에 합류를 요청한 멤버를 승인하거나, 반려하여 수정을 요청할 수 있습니다."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 md:gap-12">
+
+              {/* ── 왼쪽: 대기 중 + 거절된 멤버 ── */}
+              <div className="space-y-4">
+
+                {/* 대기 중 헤더 */}
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <p className="text-[11px] md:text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <Clock size={16}/>
+                    {isEn ? "Pending Approval" : "승인 대기"}
+                    <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md">{pendingMembers.length}</span>
+                  </p>
+                </div>
+
+                {pendingMembers.length === 0 ? (
+                  <div className="bg-slate-50 rounded-[20px] md:rounded-[30px] p-8 md:p-10 text-center border border-slate-100 border-dashed">
+                    <p className="text-xs md:text-sm font-bold text-slate-400">
+                      {isEn ? "No pending members." : "대기 중인 팀원이 없습니다."}
+                    </p>
+                  </div>
+                ) : (
+                  pendingMembers.map((m: any) => (
+                    <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                      <div className="flex items-center gap-3 md:gap-4 w-full sm:w-auto overflow-hidden">
+                        <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-base md:text-lg">
+                          {(isEn ? (m.nameEn || m.name) : m.name)?.charAt(0)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-sm text-slate-800 truncate">
+                            {isEn ? (m.nameEn || m.name) : m.name}
+                            <span className="text-indigo-500 ml-1 text-xs">
+                              ({isEn ? (m.jobTitleEn || m.jobTitle) : m.jobTitle})
+                            </span>
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <button 
+                          onClick={async () => { 
+                            const reason = window.prompt(
+                              isEn ? "Please enter the rejection reason. (Optional)" : "거절 사유를 입력해주세요. (선택사항)"
+                            );
+                            if (reason !== null) {
+                              setIsPending(true); 
+                              await handleMemberStatus(m.id, "REJECTED", reason); 
+                              setIsPending(false); 
+                            }
+                          }} 
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all"
+                        >
+                          {isEn ? "Reject" : "거절"}
+                        </button>
+                        <button 
+                          onClick={async () => { 
+                            setIsPending(true); 
+                            await handleMemberStatus(m.id, "APPROVED"); 
+                            setIsPending(false); 
+                          }} 
+                          className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md"
+                        >
+                          {isEn ? "Approve" : "승인"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {/* 거절된 멤버 섹션 */}
+                {rejectedTeamMembers.length > 0 && (
+                  <div className="mt-8 pt-8 border-t border-slate-100">
+                    <div className="flex items-center justify-between mb-4 md:mb-6">
+                      <p className="text-[11px] md:text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+                        <Ban size={16}/>
+                        {isEn ? "Rejected Members" : "거절된 멤버"}
+                        <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md">{rejectedTeamMembers.length}</span>
+                      </p>
+                    </div>
+                    <div className="space-y-4">
+                      {rejectedTeamMembers.map((m: any) => (
+                        <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex flex-col justify-between gap-3 border border-rose-100 shadow-sm opacity-80 hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                            <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 font-black text-base md:text-lg">
+                              {(isEn ? (m.nameEn || m.name) : m.name)?.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-black text-sm text-slate-800 flex items-center flex-wrap gap-1">
+                                <span className="truncate max-w-[120px] md:max-w-full">
+                                  {isEn ? (m.nameEn || m.name) : m.name}
+                                </span>
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{m.email}</p>
+                            </div>
+                          </div>
+                          <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100/50">
+                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">
+                              {isEn ? "Rejection Reason" : "거절 사유"}
+                            </p>
+                            <p className="text-[11px] font-bold text-rose-600 italic">
+                              "{m.rejectionReason || (isEn ? "No reason" : "사유 없음")}"
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── 오른쪽: 승인된 멤버 목록 ── */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <p className="text-[11px] md:text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <Users size={16}/>
+                    {isEn ? "Active Members" : "조직원"}
+                    <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">{approvedMembers.length}</span>
+                  </p>
+                </div>
+
+                {sortedApprovedMembers.map((m: any) => (
+                  <div key={m.id} className="bg-white p-4 md:p-5 rounded-[20px] md:rounded-[25px] flex items-center justify-between gap-3 border border-slate-100 shadow-sm">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-black text-base md:text-lg ${m.id === user.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        {(isEn ? (m.nameEn || m.name) : m.name)?.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-black text-sm text-slate-800 flex items-center flex-wrap gap-1">
+                          <span className="truncate max-w-[120px] md:max-w-full">
+                            {isEn ? (m.nameEn || m.name) : m.name}
+                          </span>
+                          {m.id === user.id && (
+                            <span className="text-indigo-500 text-[9px] md:text-[10px] font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-md">(YOU)</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">
+                          {isEn ? (m.jobTitleEn || m.jobTitle) : m.jobTitle}
+                        </p>
+                      </div>
+                    </div>
+
+                    {m.id !== user.id && (
+                      <button 
+                        onClick={async () => { 
+                          if (confirm(isEn
+                            ? `[Warning] Transfer master role to ${m.nameEn || m.name}?\nYou will be demoted to a regular member.`
+                            : `[주의] ${m.name}님에게 마스터 권한을 넘기시겠습니까?\n권한을 위임하면 본인은 일반 조직원으로 강등됩니다.`
+                          )) {
+                            setIsPending(true);
+                            await transferMasterRole(m.id);
+                            setIsPending(false);
+                          }
+                        }} 
+                        className="shrink-0 px-3 md:px-4 py-2 border border-slate-200 text-slate-500 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
+                      >
+                        {isEn ? "Transfer Master" : "마스터 위임"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         )}

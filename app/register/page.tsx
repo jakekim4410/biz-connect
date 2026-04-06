@@ -501,13 +501,19 @@ export default function RegisterPage() {
 
           setError(""); setIsPending(true);
 
+          // 링크드인 URL: 전송 시에도 한 번 더 자동 변환 (안전망)
+          let finalLinkedin = linkedinUrl.trim();
+          if (finalLinkedin && !/^https?:\/\//i.test(finalLinkedin)) {
+            finalLinkedin = "https://" + finalLinkedin;
+          }
+
           const formData = new FormData(e.currentTarget);
           formData.set("phone", fullPhone);
           formData.set("nameEn", nameEn);
           formData.set("privacyConsent", String(privacyConsent));
           formData.set("isMasterFlow", String(isMasterFlow));
           formData.set("jobTitleEn", jobTitleEn);
-          formData.set("linkedinUrl", linkedinUrl);
+          formData.set("linkedinUrl", finalLinkedin); // 변환된 URL 적용
 
           // ─── 비즈니스 정보 전송 (원페이저용) ───
           const finalIndustry = industrySector === othersValue ? customIndustry : industrySector;
@@ -739,7 +745,7 @@ export default function RegisterPage() {
                               if (comp.role) { setRole(comp.role); setIsRoleLocked(true); }
                               if (comp.businessNumber) setBusinessNumber(comp.businessNumber);
 
-                              // ─── [수정] 비즈니스 정보 자동 채우기 ───
+                              // ─── 비즈니스 정보 자동 채우기 ───
                               const ind = comp.onePager?.industrySector || comp.industrySector || "";
                               if (ind) {
                                 if (industries.includes(ind)) {
@@ -888,7 +894,7 @@ export default function RegisterPage() {
                               if (comp.role) { setRole(comp.role); setIsRoleLocked(true); }
                               if (comp.businessNumber) setBusinessNumber(comp.businessNumber);
 
-                              // ─── [수정] 비즈니스 정보 자동 채우기 ───
+                              // ─── 비즈니스 정보 자동 채우기 ───
                               const ind = comp.onePager?.industrySector || comp.industrySector || "";
                               if (ind) {
                                 if (industries.includes(ind)) {
@@ -1108,8 +1114,18 @@ export default function RegisterPage() {
                 <div className="absolute left-3.5 sm:left-4 flex items-center justify-center w-6 h-6 bg-[#0A66C2] rounded text-white font-bold text-[13px] pointer-events-none shadow-sm z-10">
                   in
                 </div>
+                {/* [수정됨] 브라우저 오류 방지를 위해 type을 "text"로 변경하고 onBlur 로직 추가 */}
                 <input
-                  name="linkedinUrl" type="url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
+                  name="linkedinUrl" 
+                  type="text" 
+                  value={linkedinUrl} 
+                  onChange={(e) => setLinkedinUrl(e.target.value)}
+                  onBlur={() => {
+                    let val = linkedinUrl.trim();
+                    if (val && !/^https?:\/\//i.test(val)) {
+                      setLinkedinUrl("https://" + val);
+                    }
+                  }}
                   placeholder="https://www.linkedin.com/in/yourprofile"
                   className="w-full pl-14 sm:pl-16 pr-4 py-3 sm:p-4 bg-white rounded-2xl border border-slate-200 focus:border-blue-500 outline-none transition-colors text-sm sm:text-base relative z-0"
                 />
@@ -1168,7 +1184,6 @@ export default function RegisterPage() {
             )}
           </div>
 
-          {/* ─── [수정됨] 마스터 정보로 연동 시 비활성화(disabled) 적용 ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 pt-6 border-t border-slate-200">
             <div className="col-span-1 sm:col-span-2">
               <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">

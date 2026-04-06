@@ -1,14 +1,15 @@
-// app/buyer/actions.ts (또는 해당 바이어 액션 파일)
+// app/buyer/actions.ts
 "use server";
 
-import { db } from "../../lib/db";
+import { db } from "../../lib/db"; // (또는 "@/lib/db")
 import { revalidatePath } from "next/cache";
-// 💡 [추가] 이메일 발송 함수 import (경로는 프로젝트 설정에 맞게 @/lib/email 로 통일하는 것을 권장)
 import { sendMeetingConfirmationEmails } from "@/lib/email";
+// 💡 [추가] 로그인 세션 확인을 위한 import
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // 1. 예약 생성 (장소 포함)
 export async function createSlotAction(formData: FormData, buyerId: number) {
-  // ... (기존 코드 유지)
   const date = formData.get("date") as string;
   const hour = formData.get("hour") as string;
   const minute = formData.get("minute") as string;
@@ -39,7 +40,6 @@ export async function createSlotAction(formData: FormData, buyerId: number) {
 
 // 2. 예약 수정 (장소 수정 포함)
 export async function updateSlotAction(slotId: number, formData: FormData) {
-  // ... (기존 코드 유지)
   const date = formData.get("date") as string;
   const hour = formData.get("hour") as string;
   const minute = formData.get("minute") as string;
@@ -87,12 +87,11 @@ export async function deleteSlotAction(slotId: number) {
   return { success: true };
 }
 
-// 4. 수락 처리 시 최초 장소를 Meeting으로 복사 (🚨 여기에 이메일 발송 추가)
+// 4. 수락 처리 시 최초 장소를 Meeting으로 복사 (이메일 발송 포함)
 export async function handleStatusAction(meetingId: number, slotId: number, action: string, rejectionReason?: string) {
   if (action === "ACCEPT") {
     const slot = await db.timeSlot.findUnique({ where: { id: slotId } });
     
-    // 💡 [수정] update 시 바이어, 셀러 정보와 슬롯(시간) 정보를 같이 가져오도록 include 추가
     const confirmedMeeting = await db.meeting.update({ 
       where: { id: meetingId }, 
       data: { status: "CONFIRMED", location: slot?.location },
@@ -109,7 +108,6 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
     });
     await db.timeSlot.update({ where: { id: slotId }, data: { status: "CLOSED" } });
 
-// 💡 [추가] 이메일 발송 로직 실행
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
         year: 'numeric', month: 'long', day: 'numeric',
@@ -117,13 +115,11 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
       }).format(confirmedMeeting.timeSlot.startTime);
 
       await sendMeetingConfirmationEmails({
-        // 🚨 하드코딩 제거! 이제 진짜 회원 이메일로 갑니다.
         buyerEmail: confirmedMeeting.buyer?.email || "", 
         buyerName: confirmedMeeting.buyer?.companyName || confirmedMeeting.buyer?.name || "바이어",
         sellerEmail: confirmedMeeting.seller?.email || "", 
         sellerName: confirmedMeeting.seller?.companyName || confirmedMeeting.seller?.name || "셀러",
         meetingDate: meetingDateStr,
-        // 💡 새로 추가된 데이터
         location: confirmedMeeting.location || confirmedMeeting.timeSlot.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
@@ -131,7 +127,6 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
     }
 
   } else {
-    // 거절 시 기존 로직 유지
     await db.meeting.update({ where: { id: meetingId }, data: { status: "REJECTED", rejectionReason } });
   }
   revalidatePath("/buyer");
@@ -140,7 +135,6 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
 
 // 5. 장소 변경 요청 (바이어가 셀러에게 제안)
 export async function requestLocationChange(meetingId: number, newLocation: string) {
-  // ... (기존 코드 유지)
   await db.meeting.update({
     where: { id: meetingId },
     data: { 
@@ -154,7 +148,6 @@ export async function requestLocationChange(meetingId: number, newLocation: stri
 
 // 6. 장소 변경 응답 (셀러가 결정)
 export async function respondLocationChange(meetingId: number, action: "ACCEPT" | "REJECT") {
-  // ... (기존 코드 유지)
   const meeting = await db.meeting.findUnique({ where: { id: meetingId } });
   if (action === "ACCEPT") {
     await db.meeting.update({
@@ -173,4 +166,56 @@ export async function respondLocationChange(meetingId: number, action: "ACCEPT" 
   }
   revalidatePath("/buyer");
   revalidatePath("/seller");
+}
+
+// ==========================================
+// 💡 아래부터 바이어용으로 추가된 멤버 관리 로직입니다.
+// ==========================================
+
+// 7. 멤버 승인/거절 처리 (바이어 마스터 전용)
+export async function handleMemberStatus(memberId: number, status: "APPROVED" | "REJECTED", reason?: string) {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+  
+  const masterId = Number((session.user as any).id);
+  const master = await db.user.findUnique({ where: { id: masterId } });
+
+  if (!master?.isMaster) return { error: "권한이 없습니다." };
+
+  const dataToUpdate: any = { approvalStatus: status };
+  if (status === "REJECTED") {
+    dataToUpdate.rejectionReason = reason || null; 
+  } else if (status === "APPROVED") {
+    dataToUpdate.rejectionReason = null; 
+  }
+
+  await db.user.update({
+    where: { id: memberId },
+    data: dataToUpdate
+  });
+
+  // 💡 바이어는 원페이저(OnePager)를 작성하지 않으므로, 셀러에 있던 원페이저 동기화 로직은 삭제했습니다.
+  
+  revalidatePath("/buyer"); // 💡 경로를 /buyer로 변경
+  return { success: true };
+}
+
+// 8. 바이어 마스터 권한 위임
+export async function transferMasterRole(newMasterId: number) {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+  
+  const currentUserId = Number((session.user as any).id);
+
+  try {
+    await db.$transaction([
+      db.user.update({ where: { id: currentUserId }, data: { isMaster: false } }),
+      db.user.update({ where: { id: newMasterId }, data: { isMaster: true, approvalStatus: "APPROVED" } })
+    ]);
+    
+    revalidatePath("/buyer"); // 💡 경로를 /buyer로 변경
+    return { success: true };
+  } catch (e) {
+    return { error: "권한 위임 중 오류 발생" };
+  }
 }

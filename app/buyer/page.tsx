@@ -26,44 +26,24 @@ export default async function BuyerPage() {
     include: { 
       meetings: { 
         include: { 
-          seller: { 
-            include: { 
-              onePager: true 
-            } 
-          }, 
+          seller: { include: { onePager: true } }, 
           timeSlot: true 
         } 
       } 
     },
-    orderBy: { 
-      startTime: 'asc' 
-    }
+    orderBy: { startTime: 'asc' }
   });
 
-  /**
-   * [핵심 수정] 확정된 미팅 일정 조회
-   * - 기존: status: "ACCEPTED"
-   * - 변경: status: { in: ["ACCEPTED", "CONFIRMED"] }
-   * => 승인(ACCEPTED)된 것과 최종 확정(CONFIRMED)된 미팅 모두 불러옵니다.
-   */
   const confirmedMeetings = await db.meeting.findMany({
     where: { 
       buyerId, 
       status: { in: ["ACCEPTED", "CONFIRMED"] } 
     },
     include: { 
-      seller: { 
-        include: { 
-          onePager: true 
-        } 
-      }, 
+      seller: { include: { onePager: true } }, 
       timeSlot: true 
     },
-    orderBy: { 
-      timeSlot: { 
-        startTime: 'asc' 
-      } 
-    }
+    orderBy: { timeSlot: { startTime: 'asc' } }
   });
 
   const allSellers = await db.user.findMany({
@@ -71,13 +51,36 @@ export default async function BuyerPage() {
       role: "SELLER", 
       approvalStatus: "APPROVED" 
     },
-    include: { 
-      onePager: true 
-    },
-    orderBy: { 
-      companyName: 'asc' 
-    }
+    include: { onePager: true },
+    orderBy: { companyName: 'asc' }
   });
+
+  // ✅ 셀러 페이지와 동일하게 팀 관련 쿼리 추가
+  let pendingMembers: any[] = [];
+  let approvedMembers: any[] = [];
+  let rejectedTeamMembers: any[] = [];
+
+  if (user.isMaster) {
+    pendingMembers = await db.user.findMany({
+      where: { 
+        companyName: user.companyName, 
+        approvalStatus: "PENDING", 
+        id: { not: buyerId } 
+      }
+    });
+    approvedMembers = await db.user.findMany({
+      where: { 
+        companyName: user.companyName, 
+        approvalStatus: "APPROVED" 
+      }
+    });
+    rejectedTeamMembers = await db.user.findMany({
+      where: { 
+        companyName: user.companyName, 
+        approvalStatus: "REJECTED" 
+      }
+    });
+  }
 
   return (
     <BuyerClient 
@@ -85,7 +88,11 @@ export default async function BuyerPage() {
       mySlots={mySlots} 
       confirmedMeetings={confirmedMeetings} 
       allSellers={allSellers}
-      buyerId={buyerId} 
+      buyerId={buyerId}
+      // ✅ BuyerClient에 팀 관련 props 전달
+      pendingMembers={pendingMembers}
+      approvedMembers={approvedMembers}
+      rejectedTeamMembers={rejectedTeamMembers}
     />
   );
 }
