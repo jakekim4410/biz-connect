@@ -49,8 +49,34 @@ const getScoreStyle = (score: number) => {
 const avgScore = (arr: SearchResultItem[]) =>
   arr.length ? Math.round(arr.reduce((s, r) => s + (r.matchScore ?? 0), 0) / arr.length) : 0;
 
+// ─── [추가] 회사명 정규화 비교 헬퍼 ────────────────────────────────────────
+// 대소문자·공백·특수문자를 무시하고 유사도 비교
+const normalizeCompanyName = (name: string): string =>
+  name.toLowerCase().replace(/[\s\-_()\[\].,·•\/\\]/g, "").trim();
+
+const isRegisteredCompany = (
+  resultName: string,
+  registeredNames: string[]
+): boolean => {
+  const normalizedResult = normalizeCompanyName(resultName);
+  return registeredNames.some((registered) => {
+    const normalizedRegistered = normalizeCompanyName(registered);
+    // 완전 일치 또는 한쪽이 다른쪽을 포함하는 경우 (예: "ABC" vs "ABC Inc.")
+    return (
+      normalizedResult === normalizedRegistered ||
+      normalizedResult.includes(normalizedRegistered) ||
+      normalizedRegistered.includes(normalizedResult)
+    );
+  });
+};
+
 // ─── 메인 ──────────────────────────────────────────────────────────────────
-export default function AiSearchClient() {
+// [추가] registeredCompanyNames prop: DB에 등록된 모든 승인된 회사명 배열
+export default function AiSearchClient({
+  registeredCompanyNames = [],
+}: {
+  registeredCompanyNames?: string[];
+}) {
   const [query, setQuery]                 = useState("");
   const [buyerResults, setBuyerResults]   = useState<SearchResultItem[]>([]);
   const [sellerResults, setSellerResults] = useState<SearchResultItem[]>([]);
@@ -85,8 +111,19 @@ export default function AiSearchClient() {
       const sellerData = await sellerRes.json();
       if (!buyerRes.ok && !sellerRes.ok) { setError("검색 중 오류가 발생했습니다."); return; }
 
-      const buyers:  SearchResultItem[] = buyerData.results  || [];
-      const sellers: SearchResultItem[] = sellerData.results || [];
+      const rawBuyers:  SearchResultItem[] = buyerData.results  || [];
+      const rawSellers: SearchResultItem[] = sellerData.results || [];
+
+      // ── [추가] 등록된 회사만 필터링 ──────────────────────────────────────
+      // registeredCompanyNames가 비어있으면 필터링 스킵 (데이터 미전달 방어)
+      const buyers: SearchResultItem[] = registeredCompanyNames.length > 0
+        ? rawBuyers.filter((r) => isRegisteredCompany(r.companyName, registeredCompanyNames))
+        : rawBuyers;
+      const sellers: SearchResultItem[] = registeredCompanyNames.length > 0
+        ? rawSellers.filter((r) => isRegisteredCompany(r.companyName, registeredCompanyNames))
+        : rawSellers;
+      // ─────────────────────────────────────────────────────────────────────
+
       const fb = buyerData.isFallback || sellerData.isFallback || false;
       setBuyerResults(buyers); setSellerResults(sellers); setIsFallback(fb);
 
@@ -99,7 +136,7 @@ export default function AiSearchClient() {
         setSummary(
           buyers.length + sellers.length > 0
             ? `"${q}" 검색 결과 바이어 ${buyers.length}개사, 셀러 ${sellers.length}개사가 매칭되었습니다. 가장 관련도 높은 바이어는 ${topB}(${buyers[0]?.matchScore ?? 0}점), 셀러는 ${topS}(${sellers[0]?.matchScore ?? 0}점)입니다. 평균 매칭도는 바이어 ${avgScore(buyers)}%, 셀러 ${avgScore(sellers)}%입니다.`
-            : `"${q}"에 해당하는 매칭 결과가 없습니다. 검색어를 바꿔보세요.`
+            : `"${q}"에 해당하는 등록된 회원사 중 매칭 결과가 없습니다. 검색어를 바꿔보세요.`
         );
       }
       setHistory(prev => [
@@ -339,7 +376,7 @@ export default function AiSearchClient() {
               </button>
             </div>
             <p className="text-[11px] text-slate-400 font-bold mt-2.5" style={{ wordBreak: "keep-all" }}>
-              💡 바이어·셀러 구분 없이 자유롭게 입력하세요.
+              💡 바이어·셀러 구분 없이 자유롭게 입력하세요. 등록된 회원사 중에서만 결과를 표시합니다.
             </p>
           </div>
 
@@ -530,7 +567,7 @@ function ResultColumns({ buyerResults, sellerResults, ResultCard, ColumnHeader }
           <div key={c.key}>
             <ColumnHeader role={c.role} results={c.results} />
             {c.results.length === 0
-              ? <Empty label={`관련 ${c.label} 없음`} />
+              ? <Empty label={`등록된 ${c.label} 중 매칭 없음`} />
               : <div className="space-y-3">{c.results.map((r: SearchResultItem, i: number) => <ResultCard key={i} item={r} rank={i + 1} role={c.role} />)}</div>
             }
           </div>
@@ -544,7 +581,7 @@ function ResultColumns({ buyerResults, sellerResults, ResultCard, ColumnHeader }
             {ci === 1 && <div className="hidden" />}
             <ColumnHeader role={c.role} results={c.results} />
             {c.results.length === 0
-              ? <Empty label={`관련 ${c.label} 없음`} />
+              ? <Empty label={`등록된 ${c.label} 중 매칭 없음`} />
               : <div className="space-y-3">{c.results.map((r: SearchResultItem, i: number) => <ResultCard key={i} item={r} rank={i + 1} role={c.role} />)}</div>
             }
           </div>
