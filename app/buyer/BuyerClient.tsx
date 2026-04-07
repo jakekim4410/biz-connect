@@ -66,6 +66,7 @@ export default function BuyerClient({
   const initialTab = searchParams.get('tab') || 'directory';
 
   const [isPending, setIsPending] = useState(false);
+  const [processingMemberId, setProcessingMemberId] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -2202,29 +2203,32 @@ export default function BuyerClient({
                       </div>
                       <div className="flex gap-2 w-full sm:w-auto">
                         <button 
+                          disabled={processingMemberId !== null}
                           onClick={async () => { 
                             const reason = window.prompt(
                               isEn ? "Please enter the rejection reason. (Optional)" : "거절 사유를 입력해주세요. (선택사항)"
                             );
                             if (reason !== null) {
-                              setIsPending(true); 
+                              setProcessingMemberId(m.id);
                               await handleMemberStatus(m.id, "REJECTED", reason); 
-                              setIsPending(false); 
+                              setProcessingMemberId(null);
                             }
                           }} 
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                         >
-                          {isEn ? "Reject" : "거절"}
+                          {processingMemberId === m.id ? (isEn ? "Processing..." : "처리중") : (isEn ? "Reject" : "거절")}
                         </button>
                         <button 
+                          disabled={processingMemberId !== null}
                           onClick={async () => { 
-                            setIsPending(true); 
+                            setProcessingMemberId(m.id);
                             await handleMemberStatus(m.id, "APPROVED"); 
-                            setIsPending(false); 
+                            setProcessingMemberId(null);
                           }} 
-                          className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md"
+                          className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                         >
-                          {isEn ? "Approve" : "승인"}
+                          {processingMemberId === m.id && <RefreshCw size={14} className="animate-spin" />}
+                          {processingMemberId === m.id ? (isEn ? "Processing..." : "승인 중...") : (isEn ? "Approve" : "승인")}
                         </button>
                       </div>
                     </div>

@@ -20,7 +20,7 @@ import {
   Users, ShieldCheck, User as UserIcon, Save, AlertCircle, Building2,
   Trophy, ArrowRight, AlertTriangle, TrendingUp, Target,
   XCircle, Calendar, Info, CheckCircle2, Globe, MessageCircle,
-  ChevronDown, ChevronUp, UserCheck, Crown, Link as LinkIcon, Lock
+  ChevronDown, ChevronUp, UserCheck, Crown, Link as LinkIcon, Lock, RefreshCw
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import MeetingChat from "@/components/MeetingChat";
@@ -640,6 +640,7 @@ export default function SellerClient({
   const isEn = locale === "en";
 
   const [isPending, setIsPending] = useState(false);
+  const [processingMemberId, setProcessingMemberId] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('available');
   const [confirmedSort, setConfirmedSort] = useState("asc");
@@ -1619,21 +1620,32 @@ export default function SellerClient({
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
                           <button
+                            disabled={processingMemberId !== null}
                             onClick={async () => {
                               const reason = window.prompt(isEn ? "Please enter the rejection reason. (Optional)" : "거절 사유를 입력해주세요. (선택사항)");
                               if (reason !== null) {
-                                setIsPending(true);
+                                setProcessingMemberId(m.id);
                                 await handleMemberStatus(m.id, "REJECTED", reason);
-                                setIsPending(false);
+                                setProcessingMemberId(null);
                               }
                             }}
-                            className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all"
-                          >{t.seller.team.rejectBtn}</button>
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                          >
+                            {processingMemberId === m.id ? (isEn ? "Processing..." : "처리중") : t.seller.team.rejectBtn}
+                          </button>
 
                           <button
-                            onClick={async () => { setIsPending(true); await handleMemberStatus(m.id, "APPROVED"); setIsPending(false); }}
-                            className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md"
-                          >{t.seller.team.approveBtn}</button>
+                            disabled={processingMemberId !== null}
+                            onClick={async () => { 
+                              setProcessingMemberId(m.id); 
+                              await handleMemberStatus(m.id, "APPROVED"); 
+                              setProcessingMemberId(null); 
+                            }}
+                            className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                          >
+                            {processingMemberId === m.id && <RefreshCw size={14} className="animate-spin" />}
+                            {processingMemberId === m.id ? (isEn ? "Processing..." : "승인 중...") : t.seller.team.approveBtn}
+                          </button>
                         </div>
                       </div>
                     ))
