@@ -23,7 +23,7 @@ export default async function MeetingsPage() {
 
     if (status === "ACCEPTED") {
       const m = await db.meeting.findUnique({ where: { id: meetingId } });
-      if (m) {
+      if (m && m.timeSlotId) {
         await db.timeSlot.update({
           where: { id: m.timeSlotId },
           data: { status: "MATCHED" }
@@ -56,7 +56,7 @@ export default async function MeetingsPage() {
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                     <span className="font-bold text-indigo-600">
-                      {new Date(meeting.timeSlot.startTime).toLocaleString()}
+                      {meeting.timeSlot ? new Date(meeting.timeSlot.startTime).toLocaleString() : "시간 미정 (Direct Request)"}
                     </span>
                     {meeting.status === "ACCEPTED" && (
                       <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-indigo-700 font-bold">
