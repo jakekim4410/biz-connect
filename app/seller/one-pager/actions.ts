@@ -123,11 +123,21 @@ export async function saveOnePager(formData: FormData) {
 
     const memberIds = companyMembers.map(m => m.id).filter(id => id !== userId);
 
-    // 3. 동일 회사의 다른 멤버들의 원페이저도 비즈니스 정보만 동일하게 업데이트합니다.
-    if (memberIds.length > 0) {
-      await db.onePager.updateMany({
-        where: { userId: { in: memberIds } },
-        data: sharedBusinessData,
+    // 3. 동일 회사의 다른 멤버들의 원페이저를 upsert (없으면 생성, 있으면 업데이트)
+    //    이렇게 해야 원페이저가 없던 멤버도 배너가 사라진다.
+    for (const memberId of memberIds) {
+      await db.onePager.upsert({
+        where: { userId: memberId },
+        update: sharedBusinessData,
+        create: {
+          ...sharedBusinessData,
+          userId: memberId,
+          picName: "",
+          picNameEn: "",
+          picTitle: "",
+          picTitleEn: "",
+          contactEmail: "",
+        },
       });
     }
 

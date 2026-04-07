@@ -7,12 +7,11 @@ import OnePagerForm from "./OnePagerForm";
 export default async function OnePagerPage() {
   const session = await getServerSession(authOptions);
 
-  // 세션이 없거나 SELLER가 아니면 로그인 페이지로 리다이렉트
   if (!session || (session.user as any).role !== "SELLER") redirect("/login");
 
   const userId = Number((session.user as any).id);
 
-  // 1. 로그인된 User 정보와 OnePager 정보를 동시에 Fetching
+  // 로그인된 User 정보와 본인 OnePager를 가져옴
   const userData = await db.user.findUnique({
     where: { id: userId },
     include: { onePager: true },
@@ -20,33 +19,40 @@ export default async function OnePagerPage() {
 
   if (!userData) redirect("/login");
 
-  // 2. OnePager가 존재하더라도 핵심 필드가 비어 있으면 User 테이블 값으로 보완
-  //    (가입 시 자동 생성된 OnePager가 빈 값인 경우를 커버)
-  const op = userData.onePager;
+  // 같은 회사에서 가장 최근에 저장된 원페이저 (비즈니스 데이터 기준)
+  const latestCompanyOnePager = await db.onePager.findFirst({
+    where: { user: { companyName: userData.companyName } },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  // 비즈니스 데이터: 회사 내 최신 원페이저 우선 → 본인 원페이저 → User 프로필 순
+  const biz = latestCompanyOnePager ?? userData.onePager;
+  // PIC(담당자) 데이터: 항상 본인 원페이저 or 본인 프로필
+  const pic = userData.onePager;
 
   const existingData = {
-    companyNameKr:  op?.companyNameKr   || userData.companyName     || "",
-    companyNameEn:  op?.companyNameEn   || userData.companyNameEn   || "",
-    ceoName:        op?.ceoName         || userData.ceoNameKo       || "",
-    ceoNameEn:      op?.ceoNameEn       || userData.ceoNameEn       || "",
-    picName:        op?.picName         || userData.name            || "",
-    picNameEn:      op?.picNameEn       || userData.nameEn          || "",
-    picTitle:       op?.picTitle        || userData.jobTitle        || "",
-    picTitleEn: op?.picTitleEn || userData.jobTitleEn || "",
-    contactEmail:   op?.contactEmail    || userData.email           || "",
-    primaryTech:    op?.primaryTech     || userData.primaryTech     || "",
-    industrySector: op?.industrySector  || userData.industrySector  || "",
-    yearFounded:    op?.yearFounded     || userData.yearFounded     || "",
-    investmentStage:op?.investmentStage || userData.investmentStage || "",
-    linkedinUrl:    op?.linkedinUrl     || userData.linkedinUrl     || "",
-    productType:    op?.productType     || "",
-    solutionSummary:op?.solutionSummary || "",
-    problem:        op?.problem         || "",
-    solution:       op?.solution        || "",
-    traction:       op?.traction        || "",
-    bizModel:       op?.bizModel        || "",
-    monthlyRevenue: op?.monthlyRevenue  || "",
-    pitchDeckUrl:   op?.pitchDeckUrl    || "",
+    companyNameKr:   biz?.companyNameKr   || userData.companyName     || "",
+    companyNameEn:   biz?.companyNameEn   || userData.companyNameEn   || "",
+    ceoName:         biz?.ceoName         || userData.ceoNameKo       || "",
+    ceoNameEn:       biz?.ceoNameEn       || userData.ceoNameEn       || "",
+    picName:         pic?.picName         || userData.name            || "",
+    picNameEn:       pic?.picNameEn       || userData.nameEn          || "",
+    picTitle:        pic?.picTitle        || userData.jobTitle        || "",
+    picTitleEn:      pic?.picTitleEn      || userData.jobTitleEn      || "",
+    contactEmail:    pic?.contactEmail    || userData.email           || "",
+    primaryTech:     biz?.primaryTech     || userData.primaryTech     || "",
+    industrySector:  biz?.industrySector  || userData.industrySector  || "",
+    yearFounded:     biz?.yearFounded     || userData.yearFounded     || "",
+    investmentStage: biz?.investmentStage || userData.investmentStage || "",
+    linkedinUrl:     biz?.linkedinUrl     || userData.linkedinUrl     || "",
+    productType:     biz?.productType     || "",
+    solutionSummary: biz?.solutionSummary || "",
+    problem:         biz?.problem         || "",
+    solution:        biz?.solution        || "",
+    traction:        biz?.traction        || "",
+    bizModel:        biz?.bizModel        || "",
+    monthlyRevenue:  biz?.monthlyRevenue  || "",
+    pitchDeckUrl:    biz?.pitchDeckUrl    || "",
   };
 
   return (
@@ -55,4 +61,4 @@ export default async function OnePagerPage() {
       <OnePagerForm initialData={existingData} />
     </div>
   );
-}
+}

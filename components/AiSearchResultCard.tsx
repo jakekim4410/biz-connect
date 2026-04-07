@@ -224,10 +224,10 @@ export default function AiSearchResultCard({
                       {matched && onViewOnePager && (
                         <button
                           onClick={() => onViewOnePager(result.companyName)}
-                          className="mt-1 px-4 py-2 bg-indigo-600 text-white text-xs font-black rounded-[12px] hover:bg-indigo-700 transition-colors flex items-center gap-1.5 w-fit shadow-md"
+                          className="mt-1 px-4 py-2 bg-indigo-600 text-white text-xs font-black rounded-[12px] hover:bg-indigo-700 transition-colors flex items-center gap-1.5 w-fit shadow-md whitespace-nowrap shrink-0"
                         >
                           <FileSearch size={12} />
-                          {onePagerLabel}
+                          <span className="whitespace-nowrap">{onePagerLabel}</span>
                         </button>
                       )}
                     </div>

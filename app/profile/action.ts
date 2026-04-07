@@ -81,6 +81,8 @@ export async function updateProfileAction(formData: FormData) {
       const ceoNameEn        = formData.get("ceoNameEn") as string;
       const bizNumber        = formData.get("businessNumber") as string;
       const industrySector   = formData.get("industrySector") as string;
+      const primaryRegion    = formData.get("primaryRegion") as string | null;
+      const secondaryRegion  = formData.get("secondaryRegion") as string | null;
       const primaryTech      = formData.get("primaryTech") as string;
       const investmentStage  = formData.get("investmentStage") as string;
       const yearFounded      = formData.get("yearFounded") as string;
@@ -119,6 +121,16 @@ export async function updateProfileAction(formData: FormData) {
             data: { companyName: newCompanyName },
           });
         }
+        // 동일 회사 소속 전원 활동 권역 동기화
+        const regionSyncData: any = {};
+        if (primaryRegion !== null && primaryRegion !== undefined) regionSyncData.primaryRegion = primaryRegion || null;
+        if (secondaryRegion !== null && secondaryRegion !== undefined) regionSyncData.secondaryRegion = secondaryRegion || null;
+        if (Object.keys(regionSyncData).length > 0) {
+          await tx.user.updateMany({
+            where: { companyName: newCompanyName || currentUser.companyName },
+            data: regionSyncData,
+          });
+        }
         // 본인 개인+회사 정보 업데이트
         await tx.user.update({
           where: { id: userId },
@@ -130,6 +142,8 @@ export async function updateProfileAction(formData: FormData) {
             ceoNameEn,
             businessNumber: bizNumber,
             industrySector,
+            primaryRegion:   primaryRegion || null,
+            secondaryRegion: secondaryRegion || null,
             primaryTech,
             investmentStage,
             yearFounded,

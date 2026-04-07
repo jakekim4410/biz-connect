@@ -2,38 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { registerUserAction, checkExistingCompanyAction, checkExistingBusinessNumberAction, checkExistingEmailAction } from "./action";
-import { useI18n } from "@/lib/i18n";
-
-// ─── [추가] 산업 카테고리 정의 (원페이저와 연동용) ───
-const INDUSTRY_CATEGORIES_KO = [
-  "인공지능 (AI & Big Data)",
-  "핀테크 (Fintech)",
-  "바이오/헬스케어 (Bio & Healthcare)",
-  "이커머스/물류 (E-commerce & Logistics)",
-  "에듀테크 (Edtech)",
-  "모빌리티/자율주행 (Mobility & Auto)",
-  "프롭테크/부동산 (Proptech)",
-  "SaaS/B2B 솔루션 (SaaS & B2B)",
-  "ESG/클린테크 (ESG & Cleantech)",
-  "로보틱스/딥테크 (Robotics & Deeptech)",
-  "콘텐츠/엔터테인먼트 (Content & Entertainment)",
-  "기타 (Others)",
-];
-
-const INDUSTRY_CATEGORIES_EN = [
-  "AI & Big Data",
-  "Fintech",
-  "Bio & Healthcare",
-  "E-commerce & Logistics",
-  "Edtech",
-  "Mobility & Autonomous Driving",
-  "Proptech & Real Estate",
-  "SaaS & B2B Solutions",
-  "ESG & Cleantech",
-  "Robotics & Deeptech",
-  "Content & Entertainment",
-  "Others",
-];
+import { useI18n, regionOptions, industryOptions } from "@/lib/i18n";
 
 // ─── 국가코드 목록 ───
 const COUNTRY_CODES = [
@@ -243,6 +212,8 @@ export default function RegisterPage() {
   const [primaryTech, setPrimaryTech] = useState("");
   const [investmentStage, setInvestmentStage] = useState("");
   const [yearFounded, setYearFounded] = useState("");
+  const [primaryRegion, setPrimaryRegion] = useState("");
+  const [secondaryRegion, setSecondaryRegion] = useState("");
 
   const [selectedType, setSelectedType] = useState("VC");
   const [userTypeDetail, setUserTypeDetail] = useState("");
@@ -268,7 +239,7 @@ export default function RegisterPage() {
   // ─── 국가 코드가 한국(+82)인지 여부 ───
   const isKorean = countryCode === "+82";
   
-  const industries = isKorean ? INDUSTRY_CATEGORIES_KO : INDUSTRY_CATEGORIES_EN;
+  const industries = industryOptions.map(opt => isKorean ? opt.ko : opt.en);
   const othersValue = isKorean ? "기타 (Others)" : "Others";
 
   // 옵셔널 체이닝(?.)을 추가하여 타입스크립트 에러 안전하게 방어
@@ -1279,6 +1250,61 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          {/* ─── [추가] 주 활동 권역 (1안 필수, 2안 선택) ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+            <div className="col-span-1">
+              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                {r.primaryRegionLabel} <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  required
+                  name="primaryRegion"
+                  value={primaryRegion}
+                  onChange={(e) => setPrimaryRegion(e.target.value)}
+                  className="w-full px-4 py-3 sm:p-4 pr-10 rounded-2xl border border-slate-200 bg-white outline-none focus:border-blue-500 appearance-none text-sm sm:text-base cursor-pointer"
+                >
+                  <option value="" disabled>{r.regionPlaceholder}</option>
+                  {regionOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {locale === "ko" ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-slate-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-1">
+              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                {r.secondaryRegionLabel} <span className="text-slate-300 ml-1">(Optional)</span>
+              </label>
+              <div className="relative">
+                <select
+                  name="secondaryRegion"
+                  value={secondaryRegion}
+                  onChange={(e) => setSecondaryRegion(e.target.value)}
+                  className="w-full px-4 py-3 sm:p-4 pr-10 rounded-2xl border border-slate-200 bg-white outline-none focus:border-blue-500 appearance-none text-sm sm:text-base cursor-pointer"
+                >
+                  <option value="">{r.regionPlaceholder}</option>
+                  {regionOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {locale === "ko" ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-slate-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
               {r.preferredPartnersLabel}
@@ -1326,6 +1352,7 @@ export default function RegisterPage() {
         </div>
 
         {/* ─── 제출 버튼 ─── */}
+        <input type="hidden" name="locale" value={locale} />
         <button
           type="submit" disabled={!canSubmit}
           className={`w-full py-4 sm:py-5 rounded-[24px] sm:rounded-[30px] font-black text-lg sm:text-xl shadow-2xl transition-all mt-4 ${canSubmit ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}

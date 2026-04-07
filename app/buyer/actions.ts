@@ -3,10 +3,24 @@
 
 import { db } from "../../lib/db"; // (또는 "@/lib/db")
 import { revalidatePath } from "next/cache";
-import { sendMeetingConfirmationEmails } from "@/lib/email";
+import { sendMeetingConfirmationEmails, sendApprovalCompletedEmail, sendJoinRejectedEmail } from "@/lib/email";
 // 💡 [추가] 로그인 세션 확인을 위한 import
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { Locale } from "@/lib/i18n";
+
+const REJECTION_REASONS = {
+  ko: {
+    matchedOther: "타기업 매칭",
+    cancelledByBuyer: "바이어/VC가 예약을 취소하였습니다.",
+    defaultReason: "사유가 입력되지 않았습니다.",
+  },
+  en: {
+    matchedOther: "Matched with another company",
+    cancelledByBuyer: "The Buyer/VC has cancelled the reservation.",
+    defaultReason: "No reason provided.",
+  }
+};
 
 // 1. 예약 생성 (장소 포함)
 export async function createSlotAction(formData: FormData, buyerId: number) {
@@ -73,10 +87,12 @@ export async function updateSlotAction(slotId: number, formData: FormData) {
 }
 
 // 3. 예약 취소 
-export async function deleteSlotAction(slotId: number) {
+// [UPDATE] locale 파라미터 추가
+export async function deleteSlotAction(slotId: number, locale: Locale = "ko") {
+  const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
   await db.meeting.updateMany({ 
     where: { timeSlotId: slotId },
-    data: { status: "REJECTED", rejectionReason: "바이어/VC가 예약을 취소하였습니다." }
+    data: { status: "REJECTED", rejectionReason: tReasons.cancelledByBuyer }
   });
   await db.timeSlot.update({ 
     where: { id: slotId },
@@ -88,7 +104,9 @@ export async function deleteSlotAction(slotId: number) {
 }
 
 // 4. 수락 처리 시 최초 장소를 Meeting으로 복사 (이메일 발송 포함)
-export async function handleStatusAction(meetingId: number, slotId: number, action: string, rejectionReason?: string) {
+// [UPDATE] locale 파라미터 추가
+export async function handleStatusAction(meetingId: number, slotId: number, action: string, rejectionReason?: string, locale: Locale = "ko") {
+  const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
   if (action === "ACCEPT") {
     const slot = await db.timeSlot.findUnique({ where: { id: slotId } });
     
@@ -104,7 +122,7 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
 
     await db.meeting.updateMany({ 
       where: { timeSlotId: slotId, id: { not: meetingId } }, 
-      data: { status: "REJECTED", rejectionReason: "타기업 매칭" } 
+      data: { status: "REJECTED", rejectionReason: tReasons.matchedOther } 
     });
     await db.timeSlot.update({ where: { id: slotId }, data: { status: "CLOSED" } });
 
@@ -127,7 +145,7 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
     }
 
   } else {
-    await db.meeting.update({ where: { id: meetingId }, data: { status: "REJECTED", rejectionReason } });
+    await db.meeting.update({ where: { id: meetingId }, data: { status: "REJECTED", rejectionReason: rejectionReason || tReasons.defaultReason } });
   }
   revalidatePath("/buyer");
   revalidatePath("/seller");
@@ -196,6 +214,25 @@ export async function handleMemberStatus(memberId: number, status: "APPROVED" | 
 
   // 💡 바이어는 원페이저(OnePager)를 작성하지 않으므로, 셀러에 있던 원페이저 동기화 로직은 삭제했습니다.
   
+  if (status === "APPROVED") {
+    const member = await db.user.findUnique({ where: { id: memberId } });
+    if (member) {
+      await sendApprovalCompletedEmail(member.email, member.name, (member as any).preferredLanguage || "ko");
+    }
+  } else if (status === "REJECTED") {
+    const member = await db.user.findUnique({ where: { id: memberId } });
+    if (member && master) {
+      await sendJoinRejectedEmail(
+        member.email, 
+        member.name, 
+        master.name, 
+        master.companyName || "BizConnect", 
+        reason, 
+        (member as any).preferredLanguage || "ko"
+      );
+    }
+  }
+  
   revalidatePath("/buyer"); // 💡 경로를 /buyer로 변경
   return { success: true };
 }
@@ -217,5 +254,95 @@ export async function transferMasterRole(newMasterId: number) {
     return { success: true };
   } catch (e) {
     return { error: "권한 위임 중 오류 발생" };
+  }
+}
+
+// 9. 다이렉트 제안 미팅 수락 및 슬롯 매핑
+// [UPDATE] locale 파라미터 추가
+export async function acceptDirectMeetingAction(meetingId: number, slotId: number, locale: Locale = "ko") {
+  const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+
+  try {
+    const currentUserId = Number((session.user as any).id);
+    // 1. 데이터 베이스 업데이트 (트랜잭션)
+    const [confirmedMeeting] = await db.$transaction([
+      // 미팅 상태 확정 및 슬롯 매핑
+      db.meeting.update({
+        where: { id: meetingId },
+        data: {
+          timeSlotId: slotId,
+          picId: currentUserId, // 👈 현재 수락한 사람을 담당자로 지정
+          status: "CONFIRMED", // 미팅 상태 확정
+          rewardStatus: "PENDING_REWARD" // 향후 베네핏 관련 예비 필드
+        },
+        include: {
+          buyer: true,
+          seller: true,
+          timeSlot: true,
+        }
+      }),
+      // 해당 슬롯에 신청했던 다른 대기중인 미팅들 자동 거절
+      db.meeting.updateMany({ 
+        where: { timeSlotId: slotId, id: { not: meetingId } }, 
+        data: { status: "REJECTED", rejectionReason: tReasons.matchedOther } 
+      }),
+      // 슬롯 상태 폐쇄 (CLOSED)
+      db.timeSlot.update({ 
+        where: { id: slotId }, 
+        data: { status: "CLOSED" } 
+      })
+    ]);
+
+    // 2. 매칭 확정 이메일 발송
+    if (confirmedMeeting.timeSlot?.startTime) {
+      const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(confirmedMeeting.timeSlot.startTime);
+
+      await sendMeetingConfirmationEmails({
+        buyerEmail: confirmedMeeting.buyer?.email || "", 
+        buyerName: confirmedMeeting.buyer?.companyName || confirmedMeeting.buyer?.name || "바이어",
+        sellerEmail: confirmedMeeting.seller?.email || "", 
+        sellerName: confirmedMeeting.seller?.companyName || confirmedMeeting.seller?.name || "셀러",
+        meetingDate: meetingDateStr,
+        location: confirmedMeeting.location || confirmedMeeting.timeSlot.location || "미지정",
+        startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
+        endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+      });
+    }
+
+    revalidatePath("/buyer");
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (e) {
+    console.error("Direct meeting acceptance error:", e);
+    return { error: "수락 처리 중 오류가 발생했습니다." };
+  }
+}
+
+// 10. 다이렉트 제안 미팅 거절 (전용 액션)
+export async function rejectDirectMeetingAction(meetingId: number, reason?: string, locale: Locale = "ko") {
+  const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "로그인이 필요합니다." };
+
+  try {
+    await db.meeting.update({
+      where: { id: meetingId },
+      data: { 
+        status: "REJECTED", 
+        rejectionReason: reason || tReasons.defaultReason 
+      }
+    });
+
+    revalidatePath("/buyer");
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (e) {
+    console.error("Direct meeting rejection error:", e);
+    return { error: "거절 처리 중 오류가 발생했습니다." };
   }
 }

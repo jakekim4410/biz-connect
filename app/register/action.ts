@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { sendRegistrationReceivedEmail, sendJoinRequestEmail } from "@/lib/email";
 
 // 1. 유사 회사명 존재 여부 확인 — 마스터 이름(한글/영문) + 회사 영문명 포함
 export async function checkExistingCompanyAction(companyName: string) {
@@ -77,6 +78,9 @@ export async function registerUserAction(formData: FormData) {
   const businessNumber    = formData.get("businessNumber") as string;
   const privacyConsent    = formData.get("privacyConsent") === "true";
   const isMasterFlow      = formData.get("isMasterFlow") === "true";
+  const locale            = (formData.get("locale") as string) || "ko";
+  const primaryRegion     = (formData.get("primaryRegion") as string) || null;
+  const secondaryRegion   = (formData.get("secondaryRegion") as string) || null;
 
   // SELLER 전용 필드
   const industrySector    = formData.get("industrySector") as string || "";
@@ -169,6 +173,7 @@ export async function registerUserAction(formData: FormData) {
         preferredPartners,
         isMaster,
         approvalStatus,
+        // preferredLanguage: locale, // [임시 중단] Prisma Client 업데이트 지연으로 인해 아래에서 Raw Query로 처리
         industrySector,
         primaryTech,
         investmentStage,
@@ -176,6 +181,34 @@ export async function registerUserAction(formData: FormData) {
         linkedinUrl,
       },
     });
+
+    // --- [임시] Prisma Client 자동 생성이 잠겨있어 Raw SQL로 언어 및 지역 설정 업데이트 ---
+    try {
+      await db.$executeRawUnsafe(
+        `UPDATE "User" SET "preferredLanguage" = $1, "primaryRegion" = $2, "secondaryRegion" = $3 WHERE id = $4`,
+        locale,
+        primaryRegion,
+        secondaryRegion,
+        newUser.id
+      );
+    } catch (e) {
+      console.error("Raw SQL Update failed:", e);
+    }
+
+    // --- [추가] 가입 완료 및 승인 대기 안내 메일 전송 ---
+    // (비동기로 진행하여 응답 속도에 영향을 주지 않도록 함 - 하지만 서버 액션 안정성을 위해 await 권장)
+    await sendRegistrationReceivedEmail(newUser.email, newUser.name, newUser.role as any, locale);
+
+    // --- [추가] 팀원 가입 시 마스터에게 알림 메일 전송 ---
+    if (!isFirstUser && masterUser) {
+      await sendJoinRequestEmail(
+        masterUser.email, 
+        masterUser.name, 
+        newUser.name, 
+        newUser.email, 
+        (masterUser as any).preferredLanguage || "ko"
+      );
+    }
 
     // SELLER OnePager 자동 생성
     if (role === "SELLER") {

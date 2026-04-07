@@ -9,32 +9,39 @@ datasource db {
 }
 
 model User {
-  id                Int      @id @default(autoincrement())
-  email             String   @unique
+  id                Int        @id @default(autoincrement())
+  email             String     @unique
   password          String
   name              String
   role              String
   companyName       String
-  companyNameEn     String   @default("")
-  ceoNameKo         String   @default("")
-  ceoNameEn         String   @default("")
-  nameEn            String   @default("")
+  companyNameEn     String     @default("")
+  ceoNameKo         String     @default("")
+  ceoNameEn         String     @default("")
+  nameEn            String     @default("")
   businessNumber    String?
   jobTitle          String
-  jobTitleEn   String   @default("")
+  jobTitleEn        String     @default("")
   phone             String
-  privacyConsent    Boolean  @default(false)
+  privacyConsent    Boolean    @default(false)
   rejectionReason   String?
-  isMaster          Boolean  @default(false)
-  approvalStatus    String   @default("APPROVED")
+  isMaster          Boolean    @default(false)
+  approvalStatus    String     @default("APPROVED")
   userType          String?
   userTypeDetail    String?
   preferredPartners String?
   timeSlots         TimeSlot[]
-  meetingsAsBuyer   Meeting[] @relation("BuyerMeetings")
-  meetingsAsSeller  Meeting[] @relation("SellerMeetings")
+  meetingsAsBuyer   Meeting[]  @relation("BuyerMeetings")
+  meetingsAsSeller  Meeting[]  @relation("SellerMeetings")
+  sentMessages      Message[]  @relation("SentMessages")
+  meetingsAsPic     Meeting[]  @relation("PicMeetings")
   onePager          OnePager?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime   @default(now())
+  preferredLanguage String     @default("ko")
+  primaryRegion     String?
+  secondaryRegion   String?
+  resetToken        String?
+  resetTokenExpires DateTime?
   industrySector    String?
   primaryTech       String?
   investmentStage   String?
@@ -43,32 +50,37 @@ model User {
 }
 
 model TimeSlot {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   startTime   DateTime
   endTime     DateTime
   description String?
   location    String?
-  status      String   @default("OPEN")
-  buyer       User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  status      String    @default("OPEN")
+  buyer       User      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId     Int
   meetings    Meeting[]
 }
 
 model Meeting {
-  id                    Int      @id @default(autoincrement())
-  status                String   @default("PENDING")
-  proposal              String?
-  rejectionReason       String?
-  location              String?
-  pendingLocation       String?
-  locationChangeStatus  String?
-  timeSlot              TimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
-  timeSlotId            Int
-  buyer                 User     @relation("BuyerMeetings", fields: [buyerId], references: [id], onDelete: Cascade)
-  buyerId               Int
-  seller                User     @relation("SellerMeetings", fields: [sellerId], references: [id], onDelete: Cascade)
-  sellerId              Int
-  createdAt             DateTime @default(now())
+  id                   Int       @id @default(autoincrement())
+  meetingType          String    @default("REGULAR") // "REGULAR", "DIRECT_REQUEST"
+  rewardStatus         String? // 추후 과금/리워드 추적용 예약 필드
+  status               String    @default("PENDING")
+  proposal             String?
+  rejectionReason      String?
+  location             String?
+  pendingLocation      String?
+  locationChangeStatus String?
+  timeSlot             TimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  timeSlotId           Int?
+  buyer                User      @relation("BuyerMeetings", fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId              Int
+  seller               User      @relation("SellerMeetings", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId             Int
+  pic                  User?     @relation("PicMeetings", fields: [picId], references: [id])
+  picId                Int?
+  messages             Message[]
+  createdAt            DateTime  @default(now())
 }
 
 model OnePager {
@@ -78,17 +90,17 @@ model OnePager {
   companyNameKr   String   @default("")
   companyNameEn   String   @default("")
   ceoName         String   @default("")
-  ceoNameEn       String   @default("")  // ⭐ 추가: 대표자 영문명
+  ceoNameEn       String   @default("") // ⭐ 추가: 대표자 영문명
   picName         String   @default("")
-  picNameEn       String   @default("")  // ⭐ 추가: 담당자 영문명
+  picNameEn       String   @default("") // ⭐ 추가: 담당자 영문명
   picTitle        String   @default("")
-  picTitleEn   String   @default("")
+  picTitleEn      String   @default("")
   productType     String   @default("")
-  solutionSummary String   @db.Text @default("")
-  problem         String   @db.Text @default("")
-  solution        String   @db.Text @default("")
-  traction        String   @db.Text @default("")
-  bizModel        String   @db.Text @default("")
+  solutionSummary String   @default("") @db.Text
+  problem         String   @default("") @db.Text
+  solution        String   @default("") @db.Text
+  traction        String   @default("") @db.Text
+  bizModel        String   @default("") @db.Text
   primaryTech     String   @default("")
   industrySector  String   @default("")
   yearFounded     String   @default("")
@@ -98,4 +110,25 @@ model OnePager {
   contactEmail    String   @default("")
   linkedinUrl     String   @default("")
   updatedAt       DateTime @updatedAt
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meetingId Int
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId  Int
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model AiSearchCache {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queryText  String   @map("query_text") @db.Text
+  searchRole String   @map("search_role") @db.Text
+  resultJson Json     @map("result_json")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([queryText, searchRole], name: "idx_ai_cache_query_role")
+  @@map("ai_search_cache")
 }

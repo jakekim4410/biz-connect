@@ -33,7 +33,7 @@ export default function LoginPage() {
         const sessionData = await sessionRes.json();
         const role = sessionData?.user?.role;
 
-        if (role === "ADMIN") router.push("/admin");
+        if (role === "ADMIN") router.push("/select-role");
         else if (role === "BUYER") router.push("/buyer");
         else if (role === "SELLER") router.push("/seller");
         else router.push("/");
@@ -84,6 +84,14 @@ export default function LoginPage() {
                 className="w-full p-4 bg-slate-50 border-none rounded-2xl shadow-inner focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                 placeholder={t.login.passwordPlaceholder}
               />
+              <div className="flex justify-end pr-2">
+                <Link 
+                  href="/forgot-password" 
+                  className="text-[11px] font-bold text-slate-400 hover:text-blue-600 transition-colors"
+                >
+                  {t.register.forgotPasswordLink}
+                </Link>
+              </div>
             </div>
 
             {error && (

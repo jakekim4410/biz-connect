@@ -3,11 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
 import { redirect } from "next/navigation";
 import SellerClient from "./SellerClient";
+import { autoExpirePastMeetings } from "../api/meetings/expire/action";
 
 export default async function SellerPage() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "SELLER") redirect("/login");
+  if (!session || !["SELLER", "ADMIN"].includes((session.user as any).role)) redirect("/login");
   const sellerId = Number((session.user as any).id);
+
+  // 지난 일정 미팅 자동 폐기 (페이지 로드 시마다 실행)
+  await autoExpirePastMeetings();
 
   const user = await db.user.findUnique({
     where: { id: sellerId },
@@ -18,19 +22,19 @@ export default async function SellerPage() {
 
   const confirmedMeetings = await db.meeting.findMany({
     where: { sellerId, status: { in: ["ACCEPTED", "CONFIRMED"] } },
-    include: { timeSlot: true, buyer: true },
+    include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { timeSlot: { startTime: 'asc' } }
   });
 
   const pendingMeetings = await db.meeting.findMany({
     where: { sellerId, status: "PENDING" },
-    include: { timeSlot: true, buyer: true },
+    include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { createdAt: 'desc' }
   });
 
   const rejectedMeetings = await db.meeting.findMany({
     where: { sellerId, status: { in: ["REJECTED", "CANCELLED"] } },
-    include: { timeSlot: true, buyer: true },
+    include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { createdAt: 'desc' }
   });
 
@@ -45,7 +49,7 @@ export default async function SellerPage() {
 
   let pendingMembers: any[] = [];
   let approvedMembers: any[] = [];
-  let rejectedTeamMembers: any[] = []; // 👇 추가됨
+  let rejectedTeamMembers: any[] = [];
 
   if (user.isMaster) {
     pendingMembers = await db.user.findMany({
@@ -54,11 +58,26 @@ export default async function SellerPage() {
     approvedMembers = await db.user.findMany({
       where: { companyName: user.companyName, approvalStatus: "APPROVED" }
     });
-    // 👇 마스터일 때 거절된 맴버 리스트 가져오기
     rejectedTeamMembers = await db.user.findMany({
       where: { companyName: user.companyName, approvalStatus: "REJECTED" }
     });
   }
+
+  // 같은 회사의 누구라도 실질적인 내용이 담긴 원페이저를 작성했으면 배너를 숨긴다
+  const companyOnePager = await db.onePager.findFirst({
+    where: { 
+      user: { companyName: user.companyName },
+      OR: [
+        { primaryTech: { not: "" } },
+        { solutionSummary: { not: "" } },
+        { industrySector: { not: "" } },
+        { ceoName: { not: "" } },
+        { productType: { not: "" } }
+      ]
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+  const companyHasOnePager = !!companyOnePager;
 
   return (
     <SellerClient 
@@ -68,10 +87,10 @@ export default async function SellerPage() {
       pendingMeetings={pendingMeetings}
       rejectedMeetings={rejectedMeetings}
       availableSlots={availableSlots} 
-      hasOnePager={!!user.onePager}
+      hasOnePager={companyHasOnePager}
       pendingMembers={pendingMembers}
       approvedMembers={approvedMembers}
-      rejectedTeamMembers={rejectedTeamMembers} // 👇 클라이언트로 전달
+      rejectedTeamMembers={rejectedTeamMembers}
     />
   );
-}
+}

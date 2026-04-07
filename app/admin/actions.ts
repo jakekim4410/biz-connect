@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { sendMeetingConfirmationEmails } from "@/lib/email";
+import { sendMeetingConfirmationEmails, sendApprovalCompletedEmail, sendJoinRejectedEmail } from "@/lib/email";
 
 // --- 1. 유저 관련 액션 ---
 
@@ -21,6 +21,26 @@ export async function updateUserAdmin(id: number, data: any) {
         approvalStatus: data.approvalStatus,
       },
     });
+    if (data.approvalStatus === "APPROVED") {
+      const user = await db.user.findUnique({ where: { id } });
+      if (user) {
+        await sendApprovalCompletedEmail(user.email, user.name, (user as any).preferredLanguage || "ko");
+      }
+    } else if (data.approvalStatus === "REJECTED") {
+      const user = await db.user.findUnique({ where: { id } });
+      if (user) {
+        // 어드민이 거절할 때는 마스터 이름을 "Administrator"로 표시하거나 회사명을 사용
+        await sendJoinRejectedEmail(
+          user.email,
+          user.name,
+          "Administrator",
+          user.companyName || "BizConnect",
+          "Requirements not met or profile incomplete.",
+          (user as any).preferredLanguage || "ko"
+        );
+      }
+    }
+
     revalidatePath("/admin");
     return { success: true };
   } catch (error) {
@@ -35,6 +55,13 @@ export async function approveUserQuickly(id: number) {
       where: { id },
       data: { approvalStatus: "APPROVED" },
     });
+    if (id) {
+      const user = await db.user.findUnique({ where: { id } });
+      if (user) {
+        sendApprovalCompletedEmail(user.email, user.name, (user as any).preferredLanguage || "ko");
+      }
+    }
+
     revalidatePath("/admin");
     return { success: true };
   } catch (error) {

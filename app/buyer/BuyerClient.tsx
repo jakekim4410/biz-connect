@@ -1,6 +1,6 @@
 "use client";
 import AiSearchResultCard from "@/components/AiSearchResultCard";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, industryOptions, regionOptions } from "@/lib/i18n";
 import { isCompanyMatch } from "@/lib/matchUtils";
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -12,6 +12,8 @@ import {
   deleteSlotAction,
   handleMemberStatus,
   transferMasterRole,
+  acceptDirectMeetingAction,
+  rejectDirectMeetingAction
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import { 
@@ -21,48 +23,19 @@ import {
   CheckCircle2, AlertCircle, Info, Rocket, Bell, Check, XCircle, FileSearch, ArrowRight, Activity, Zap,
   Users, ShieldCheck, Edit2, Trash2, Inbox,
   LayoutList, LayoutGrid, ExternalLink, Video, MapPinned, Link as LinkIcon,
-  Ban,
+  Ban, MessageCircle, RefreshCw, ChevronDown
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import React from "react";
+import MeetingChat from "@/components/MeetingChat";
 
-// ─── Industry 한↔영 매핑 테이블 ───
-const INDUSTRY_CATEGORIES_KO = [
-  "인공지능 (AI & Big Data)",
-  "핀테크 (Fintech)",
-  "바이오/헬스케어 (Bio & Healthcare)",
-  "이커머스/물류 (E-commerce & Logistics)",
-  "에듀테크 (Edtech)",
-  "모빌리티/자율주행 (Mobility & Auto)",
-  "프롭테크/부동산 (Proptech)",
-  "SaaS/B2B 솔루션 (SaaS & B2B)",
-  "ESG/클린테크 (ESG & Cleantech)",
-  "로보틱스/딥테크 (Robotics & Deeptech)",
-  "콘텐츠/엔터테인먼트 (Content & Entertainment)",
-  "기타 (Others)",
-];
-const INDUSTRY_CATEGORIES_EN = [
-  "AI & Big Data",
-  "Fintech",
-  "Bio & Healthcare",
-  "E-commerce & Logistics",
-  "Edtech",
-  "Mobility & Autonomous Driving",
-  "Proptech & Real Estate",
-  "SaaS & B2B Solutions",
-  "ESG & Cleantech",
-  "Robotics & Deeptech",
-  "Content & Entertainment",
-  "Others",
-];
 
 /** "에듀테크 (Edtech)" → "Edtech" (영문 모드일 때) */
 const localizeIndustry = (raw: string | undefined, isEn: boolean): string => {
   if (!raw) return isEn ? "N/A" : "미지정";
   if (!isEn) return raw;
-  const idx = INDUSTRY_CATEGORIES_KO.indexOf(raw);
-  if (idx !== -1) return INDUSTRY_CATEGORIES_EN[idx];
-  return raw;
+  const match = industryOptions.find(opt => opt.ko === raw);
+  return match ? match.en : raw;
 };
 
 /** URL 정규화: http/https 없으면 https:// 자동 추가 */
@@ -79,6 +52,7 @@ const TBA_VALUE = "__TBA__";
 export default function BuyerClient({ 
   mySlots = [], 
   confirmedMeetings = [], 
+  directRequests = [],
   allSellers = [], 
   buyerId, 
   user,
@@ -106,8 +80,8 @@ export default function BuyerClient({
   const [confirmedViewMode, setConfirmedViewMode] = useState<'table' | 'card'>('table');
   const [reservationViewMode, setReservationViewMode] = useState<'table' | 'card'>('table');
 
-  const [counts, setCounts] = useState({ sellers: 0, confirmed: 0, requests: 0 });
-  const [alerts, setAlerts] = useState({ directory: false, confirmed: false, pending: false });
+  const [counts, setCounts] = useState({ sellers: 0, confirmed: 0, requests: 0, direct: 0 });
+  const [alerts, setAlerts] = useState({ directory: false, confirmed: false, pending: false, direct: false });
 
   const [editSelectedType, setEditSelectedType] = useState(
     ["VC", "AC", "바이어", "스타트업", "기타"].includes(user?.userType) ? user?.userType : (user?.userType ? "기타" : "VC")
@@ -139,11 +113,62 @@ export default function BuyerClient({
   // ── 슬롯 생성: 추가 안내사항 state (신규) ──
   const [createNote, setCreateNote] = useState("");
 
+  // 다이렉트 미팅 수락 모달 state
+  const [acceptingDirect, setAcceptingDirect] = useState<any>(null);
+  const [acceptMappingSlotId, setAcceptMappingSlotId] = useState<string>("");
+  const [selectedChatMeeting, setSelectedChatMeeting] = useState<any>(null);
+
   // ── 슬롯 수정: 온라인/오프라인 선택 state ──
   const [editMeetingType, setEditMeetingType] = useState<'offline' | 'online'>('offline');
   const [editLocationValue, setEditLocationValue] = useState("");
   // ── 슬롯 수정: 온라인 링크 TBA 선택 state (신규) ──
   const [editLinkTba, setEditLinkTba] = useState(false);
+  // ── 새로운 메시지 알림 state ──
+  const [unreadMeetings, setUnreadMeetings] = useState<number[]>([]);
+
+  // ─── 핵심 알림 로직: API 응답 + localStorage lastRead 비교 ───────────────
+  // MeetingChat이 열리면 localStorage.setItem(`lastRead_${user?.id}_${id}`, Date.now())을 저장함
+  // 여기서는 상대방 메시지의 timestamp > lastRead 이면 unread로 판정
+  const checkNewMessages = async () => {
+    try {
+      const res = await fetch('/api/meetings/new-messages');
+      if (res.ok) {
+        const data = await res.json();
+        const meetings: { meetingId: number; lastMessageAt: number }[] = data.meetings || [];
+
+        const unreadIds = meetings
+          .filter(item => {
+            const lastRead = parseInt(
+              localStorage.getItem(`lastRead_${user?.id}_${item.meetingId}`) || '0',
+              10
+            );
+            // 상대방 메시지 시간이 마지막 읽은 시간보다 나중이면 unread
+            return item.lastMessageAt > lastRead;
+          })
+          .map(item => item.meetingId);
+
+        setUnreadMeetings(unreadIds);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (!mounted) return;
+    checkNewMessages();
+    const interval = setInterval(checkNewMessages, 10000); // 10초마다 폴링
+    const handleMessagesRead = () => checkNewMessages();
+    const handleUnreadUpdate = () => checkNewMessages();
+    window.addEventListener('messagesRead', handleMessagesRead);
+    window.addEventListener('unreadUpdate', handleUnreadUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('messagesRead', handleMessagesRead);
+      window.removeEventListener('unreadUpdate', handleUnreadUpdate);
+    };
+  }, [mounted]);
+
   // ── 슬롯 수정: 추가 안내사항 state (신규) ──
   const [editNote, setEditNote] = useState("");
 
@@ -213,7 +238,8 @@ export default function BuyerClient({
     setCounts({
       sellers: allSellers?.length || 0,
       confirmed: confirmedMeetings?.length || 0,
-      requests: mySlots?.reduce((acc: number, slot: any) => acc + (slot.meetings?.length || 0), 0) || 0
+      requests: mySlots?.reduce((acc: number, slot: any) => acc + (slot.meetings?.length || 0), 0) || 0,
+      direct: directRequests?.length || 0
     });
   }, []);
 
@@ -222,13 +248,15 @@ export default function BuyerClient({
     const currentSellers = allSellers?.length || 0;
     const currentConfirmed = confirmedMeetings?.length || 0;
     const currentRequests = mySlots?.reduce((acc: number, slot: any) => acc + (slot.meetings?.length || 0), 0) || 0;
+    const currentDirect = directRequests?.length || 0;
     setAlerts(prev => ({
       directory: prev.directory || currentSellers > counts.sellers,
       confirmed: prev.confirmed || currentConfirmed > counts.confirmed,
-      pending: prev.pending || currentRequests > counts.requests
+      pending: prev.pending || currentRequests > counts.requests,
+      direct: prev.direct || currentDirect > counts.direct
     }));
-    setCounts({ sellers: currentSellers, confirmed: currentConfirmed, requests: currentRequests });
-  }, [allSellers, confirmedMeetings, mySlots]);
+    setCounts({ sellers: currentSellers, confirmed: currentConfirmed, requests: currentRequests, direct: currentDirect });
+  }, [allSellers, confirmedMeetings, mySlots, directRequests]);
 
   // editingSlot이 열릴 때 미팅 타입 / 장소값 / TBA / note 초기화
   useEffect(() => {
@@ -241,6 +269,28 @@ export default function BuyerClient({
     setEditLocationValue(isTba ? "" : loc);
     setEditNote(editingSlot.note || "");
   }, [editingSlot]);
+
+  // 다이렉트 미팅 제안 매핑 확정 핸들러
+  const handleConfirmDirectMapping = async () => {
+    if (!acceptingDirect || !acceptMappingSlotId) return;
+    setIsPending(true);
+    let targetSlotId = parseInt(acceptMappingSlotId, 10);
+    
+    try {
+      const res = await acceptDirectMeetingAction(acceptingDirect.id, targetSlotId);
+      if (res.error) {
+        alert(res.error);
+      } else {
+        alert(isEn ? "Direct meeting accepted and scheduled successfully." : "다이렉트 미팅 제안이 스케줄에 수락 및 매핑되었습니다.");
+        setAcceptingDirect(null);
+        setAcceptMappingSlotId("");
+      }
+    } catch (e) {
+      alert("Error processing your request.");
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   const handleTabClick = (id: string) => {
     setExpandedSection(id);
@@ -490,7 +540,7 @@ export default function BuyerClient({
     if (!confirm(isEn ? "Cancel this reservation? Pending requests will be automatically rejected." : "🚨 정말 이 예약을 취소하시겠습니까?\n대기 중인 신청 건이 있다면 모두 자동 거절 처리됩니다.")) return;
     setIsPending(true);
     try {
-      await deleteSlotAction(slotId);
+      await deleteSlotAction(slotId, locale);
       alert(isEn ? "Reservation cancelled." : "예약이 취소되었습니다.");
       router.refresh();
     } catch (error) {
@@ -534,7 +584,7 @@ export default function BuyerClient({
     )) return;
     setIsPending(true);
     try {
-      await handleStatusAction(Number(meeting.id), Number(slot.id), 'ACCEPT', '');
+      await handleStatusAction(Number(meeting.id), Number(slot.id), 'ACCEPT', '', locale);
       setReviewingMeeting(null);
       router.refresh(); 
     } catch (error) {
@@ -551,8 +601,24 @@ export default function BuyerClient({
     setIsPending(true);
     try {
       const slotId = reviewingMeeting?.slot?.id;
-      await handleStatusAction(Number(meeting.id), Number(slotId), 'REJECT', userReason);
+      await handleStatusAction(Number(meeting.id), Number(slotId), 'REJECT', userReason, locale);
       setReviewingMeeting(null);
+      router.refresh();
+    } catch (error) {
+      alert("Error.");
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleRejectDirect = async (req: any) => {
+    const defaultReason = isEn ? "Currently not aligned with our business direction." : "현재 당사의 비즈니스 방향성과 맞지 않아 부득이하게 거절하게 되었습니다.";
+    const userReason = prompt(isEn ? "Please enter a rejection reason." : "거절 사유를 입력해주세요.", defaultReason);
+    if (userReason === null) return; 
+    setIsPending(true);
+    try {
+      await rejectDirectMeetingAction(Number(req.id), userReason, locale);
+      alert(isEn ? "Proposal rejected." : "제안이 정중히 거절되었습니다.");
       router.refresh();
     } catch (error) {
       alert("Error.");
@@ -620,13 +686,50 @@ export default function BuyerClient({
   // OptionalBadge는 완전히 제거 (렌더링하지 않음)
   const OptionalBadge = () => null;
 
+  // ── 각 섹션별 unread 카운트 계산 (LinkedIn/Slack 스타일 숫자 배지)
+  const buyerUnreadCounts = {
+    directory: alerts.directory ? 1 : 0,
+    direct: directRequests.filter((r: any) => unreadMeetings.includes(r.id)).length
+      + (alerts.direct ? 1 : 0),
+    pending: mySlots.reduce((acc: number, s: any) =>
+      acc + s.meetings.filter((m: any) => unreadMeetings.includes(m.id)).length, 0)
+      + (alerts.pending ? totalPendingRequests : 0),
+    confirmed: confirmedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length
+      + (alerts.confirmed ? 1 : 0),
+  };
+
+  const toAlertCount = (n: number) => n <= 0 ? null : n > 99 ? '99+' : String(n);
+
   const navItems: any[] = [
-    { id: 'directory', label: t.buyer.nav.directory, sub: 'EXPLORE', icon: <Search size={22}/>, isAlert: alerts.directory, count: uniqueSellers.length },
-    { id: 'pending', label: t.buyer.nav.pending, sub: 'STATUS', icon: <Clock size={22}/>, isAlert: alerts.pending, count: totalPendingRequests > 0 ? totalPendingRequests : null },
-    { id: 'confirmed', label: t.buyer.nav.confirmed, sub: 'CONFIRMED', icon: <Handshake size={22}/>, isAlert: alerts.confirmed, count: confirmedMeetings.length },
-    { id: 'generator', label: t.buyer.nav.generator, sub: 'CREATE', icon: <Plus size={22}/>, isAlert: false, count: null },
-    { id: 'analytics', label: t.buyer.nav.analytics, sub: 'INSIGHT', icon: <BarChart3 size={22}/>, isAlert: false, count: null },
-    { id: 'profile', label: t.buyer.nav.profile, sub: 'PROFILE', icon: <Settings size={22}/>, isAlert: false, count: null },
+    { id: 'directory', label: t.buyer.nav.directory, sub: 'EXPLORE', icon: <Search size={22}/>,
+      alertCount: toAlertCount(buyerUnreadCounts.directory), count: uniqueSellers.length },
+    {
+      id: 'direct',
+      label: isEn ? "Direct Proposals" : "받은 제안",
+      sub: 'DIRECT',
+      icon: <Sparkles size={22}/>,
+      alertCount: toAlertCount(buyerUnreadCounts.direct),
+      count: directRequests?.length > 0 ? directRequests.length : null
+    },
+    {
+      id: 'pending',
+      label: t.buyer.nav.pending,
+      sub: 'STATUS',
+      icon: <Clock size={22}/>,
+      alertCount: toAlertCount(buyerUnreadCounts.pending),
+      count: totalPendingRequests > 0 ? totalPendingRequests : null
+    },
+    {
+      id: 'confirmed',
+      label: t.buyer.nav.confirmed,
+      sub: 'CONFIRMED',
+      icon: <Handshake size={22}/>,
+      alertCount: toAlertCount(buyerUnreadCounts.confirmed),
+      count: confirmedMeetings.length
+    },
+    { id: 'generator', label: t.buyer.nav.generator, sub: 'CREATE', icon: <Plus size={22}/>, alertCount: null, count: null },
+    { id: 'analytics', label: t.buyer.nav.analytics, sub: 'INSIGHT', icon: <BarChart3 size={22}/>, alertCount: null, count: null },
+    { id: 'profile', label: t.buyer.nav.profile, sub: 'PROFILE', icon: <Settings size={22}/>, alertCount: null, count: null },
   ];
 
   // ── 마스터인 경우에만 팀 관리 메뉴 추가 ──
@@ -636,7 +739,7 @@ export default function BuyerClient({
       label: isEn ? "Team" : "팀 관리",
       sub: 'TEAM',
       icon: <ShieldCheck size={22}/>,
-      isAlert: pendingMembers.length > 0,
+      alertCount: pendingMembers.length > 0 ? String(pendingMembers.length) : null,
       count: pendingMembers.length > 0 ? pendingMembers.length : null,
     });
   }
@@ -704,17 +807,22 @@ export default function BuyerClient({
 
       {/* ── 네비게이션 헤더 ── */}
       <header className="bg-white/90 backdrop-blur-2xl p-3 md:p-6 rounded-[24px] md:rounded-[40px] shadow-lg md:shadow-xl border border-white sticky top-4 z-40 w-full">
-        <div className="flex flex-row md:flex-wrap md:justify-center gap-2 md:gap-12 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-row md:flex-wrap md:justify-center gap-2 md:gap-12 py-2 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => handleTabClick(item.id)}
               className={`relative flex flex-col items-center gap-1.5 p-2 md:p-3 transition-all duration-300 snap-center min-w-[70px] md:min-w-[90px] ${expandedSection === item.id ? 'scale-105 md:scale-110' : ''}`}
             >
-              {item.isAlert && (
-                <span className="absolute top-1 right-2 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full animate-pulse z-10 shadow-sm"></span>
-              )}
-              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors ${expandedSection === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}`}>
+              <div className={`relative w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors ${expandedSection === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}`}>
+                {/* ── 숫자 카운트 알림 배지 ── */}
+                {item.alertCount && (
+                  <span className={`absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-rose-500 text-white border-2 border-white animate-bounce z-10 shadow-md font-black leading-none ${
+                    item.alertCount.length > 1 ? 'h-5 min-w-[20px] px-1 text-[8px]' : 'h-5 w-5 text-[10px]'
+                  }`}>
+                    {item.alertCount}
+                  </span>
+                )}
                 {item.icon}
               </div>
               <div className="text-center mt-1">
@@ -1038,6 +1146,7 @@ export default function BuyerClient({
                         <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Location" : "장소"}</th>
                         <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Partner Company" : "파트너사"}</th>
                         <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "PIC" : "담당자"}</th>
+                        <th className="px-5 md:px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{isEn ? "Action" : "액션"}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1080,6 +1189,23 @@ export default function BuyerClient({
                               {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? <span className="text-slate-400 ml-1">({isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})</span> : ''}
                             </p>
                             <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{m.seller.email}</p>
+                            {m.pic && (
+                              <div className="flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 w-fit">
+                                <UserCheck size={10} className="shrink-0" />
+                                <span className="text-[9px] font-black uppercase tracking-tight">
+                                  PIC: {(isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 md:px-6 py-4 text-right">
+                            {/* ── 숫자 카운트 채팅 배지 (LinkedIn 스타일) ── */}
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }} className={`relative w-auto px-3 h-10 rounded-[14px] flex items-center justify-center gap-1.5 hover:shadow-lg transition-all shrink-0 ml-auto ${unreadMeetings.includes(m.id) ? 'bg-rose-500 text-white shadow-rose-200 animate-[pulse_2s_infinite]' : 'bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white'}`}>
+                              <MessageCircle size={18}/>
+                              {unreadMeetings.includes(m.id) && (
+                                <span className="text-[11px] font-black">{isEn ? 'New Message' : '새 메시지'}</span>
+                              )}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1101,8 +1227,17 @@ export default function BuyerClient({
                         <h3 className={`text-xl md:text-2xl font-black ${m.isPast ? 'text-slate-500' : 'text-slate-800'}`}>{formatDateWithDay(m.timeSlot.startTime)}</h3>
                         <p className={`text-lg md:text-xl font-bold mt-1 ${m.isPast ? 'text-slate-400' : 'text-indigo-600'}`}>{formatTime24And12(m.timeSlot.startTime)}</p>
                       </div>
-                      <div className={`w-12 h-12 rounded-2xl shadow-sm border flex items-center justify-center ${m.isPast ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-100 text-emerald-500'}`}>
-                        {m.location === TBA_VALUE ? <Clock size={24}/> : /^https?:\/\//i.test(m.location || '') ? <Video size={24}/> : <MapPin size={24}/>}
+                      <div className="flex gap-2">
+                        {/* ── 숫자 카운트 채팅 배지 (LinkedIn 카드뷰 스타일) ── */}
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }} className={`relative px-4 h-12 rounded-2xl shadow-sm border transition-colors flex items-center justify-center gap-2 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white animate-[pulse_2s_infinite]' : 'bg-indigo-50 border-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}>
+                          <MessageCircle size={22}/>
+                          {unreadMeetings.includes(m.id) && (
+                            <span className="text-[11px] font-black uppercase tracking-wider">{isEn ? 'New Message' : '새 메시지'}</span>
+                          )}
+                        </button>
+                        <div className={`w-12 h-12 rounded-2xl shadow-sm border flex items-center justify-center ${m.isPast ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-100 text-emerald-500'}`}>
+                          {m.location === TBA_VALUE ? <Clock size={24}/> : /^https?:\/\//i.test(m.location || '') ? <Video size={24}/> : <MapPin size={24}/>}
+                        </div>
                       </div>
                     </div>
                     <div className={`mt-auto p-5 rounded-[24px] border space-y-4 ${m.isPast ? 'bg-white border-slate-100 opacity-80' : 'bg-slate-50 border-slate-100'}`}>
@@ -1116,6 +1251,14 @@ export default function BuyerClient({
                           {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
                           {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? ` (${isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})` : ''}
                         </p>
+                        {m.pic && (
+                          <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100 w-fit">
+                            <UserCheck size={12} className="shrink-0" />
+                            <span className="text-[10px] font-black uppercase tracking-tight">
+                              PIC: {(isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="border-t border-slate-200/60 pt-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Meeting Location</p>
@@ -1185,7 +1328,7 @@ export default function BuyerClient({
                     </thead>
                     <tbody>
                       {filteredReservations.map((slot: any) => {
-                        const activeRequests = slot.meetings.filter((m: any) => m.status !== 'REJECTED');
+                        const activeRequests = slot.meetings.filter((m: any) => m.status !== 'REJECTED' || m.rejectionReason === 'EXPIRED_SCHEDULE');
                         if (activeRequests.length === 0) {
                           return (
                             <tr key={slot.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
@@ -1222,8 +1365,10 @@ export default function BuyerClient({
                           const isLast = mIdx === activeRequests.length - 1;
                           const isConfirmed = m.status === 'CONFIRMED';
                           const isPendingStatus = m.status === 'PENDING';
+                          const isExpired = m.rejectionReason === 'EXPIRED_SCHEDULE';
+                          
                           return (
-                            <tr key={`${slot.id}-${m.id}`} className={`transition-colors group ${isConfirmed ? 'bg-emerald-50/40 hover:bg-emerald-50' : isPendingStatus ? 'hover:bg-indigo-50/30' : 'hover:bg-slate-50/50'} ${!isLast ? 'border-b border-dashed border-slate-100' : 'border-b border-slate-200'}`}>
+                            <tr key={`${slot.id}-${m.id}`} className={`transition-colors group ${isConfirmed ? 'bg-emerald-50/40 hover:bg-emerald-50' : isExpired ? 'bg-amber-50/20 hover:bg-amber-50/40 opacity-75' : isPendingStatus ? 'hover:bg-indigo-50/30' : 'hover:bg-slate-50/50'} ${!isLast ? 'border-b border-dashed border-slate-100' : 'border-b border-slate-200'}`}>
                               {isFirst && (
                                 <>
                                   <td rowSpan={activeRequests.length} className="px-5 py-4 align-middle border-r border-slate-100">
@@ -1264,6 +1409,7 @@ export default function BuyerClient({
                                         {isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName}
                                       </p>
                                       {isConfirmed && <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap"><CheckCircle2 size={9}/> {isEn ? "Done" : "확정"}</span>}
+                                      {isExpired && <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md whitespace-nowrap"><Clock size={9}/> {isEn ? "Expired" : "지남"}</span>}
                                     </div>
                                     <p className="text-[10px] font-bold text-slate-400 mt-0.5 whitespace-nowrap">{localizeIndustry(m.seller.onePager?.industrySector, isEn) || (isEn ? 'N/A' : '산업 미지정')}</p>
                                   </div>
@@ -1280,11 +1426,21 @@ export default function BuyerClient({
                                   </p>
                                   {m.seller.email && <p className="text-[10px] font-bold text-indigo-400 pl-[19px] whitespace-nowrap">{m.seller.email}</p>}
                                   {m.seller.phone && <p className="text-[10px] font-bold text-slate-400 pl-[19px] whitespace-nowrap flex items-center gap-1"><Phone size={9}/>{m.seller.phone}</p>}
+                                  {m.pic && (
+                                    <div className="flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 w-fit">
+                                      <UserCheck size={10} className="shrink-0" />
+                                      <span className="text-[9px] font-black uppercase tracking-tight">
+                                        PIC: {(isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-5 py-3.5 text-center">
                                 {isConfirmed
                                   ? <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 whitespace-nowrap"><CheckCircle2 size={12}/> {isEn ? "Matched" : "매칭 확정"}</span>
+                                  : isExpired
+                                  ? <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 whitespace-nowrap"><Clock size={12}/> {isEn ? "Expired" : "만료됨"}</span>
                                   : slot.status !== 'CLOSED'
                                     ? <button onClick={() => setReviewingMeeting({ slot, meeting: m })} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black rounded-[10px] hover:bg-indigo-600 transition-colors whitespace-nowrap shadow-sm hover:shadow-indigo-200 flex items-center gap-1.5 mx-auto"><FileSearch size={12}/> {t.buyer.pending.reviewBtn}</button>
                                     : <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">—</span>
@@ -1366,6 +1522,14 @@ export default function BuyerClient({
                                       {isEn ? (m.seller.nameEn || m.seller.name) : m.seller.name}
                                       {(isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle) ? ` (${isEn ? (m.seller.jobTitleEn || m.seller.jobTitle) : m.seller.jobTitle})` : ''}
                                     </p>
+                                    {m.pic && (
+                                      <div className="flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 w-fit">
+                                        <UserCheck size={10} className="shrink-0" />
+                                        <span className="text-[9px] font-black uppercase tracking-tight">
+                                          PIC: {(isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 {slot.status !== 'CLOSED' && <button onClick={() => setReviewingMeeting({ slot, meeting: m })} className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 text-white text-xs font-black rounded-[12px] hover:bg-indigo-600 transition-colors shrink-0">{t.buyer.pending.detailReview}</button>}
@@ -1563,6 +1727,120 @@ export default function BuyerClient({
                 </button>
               </form>
             </div>
+          </section>
+        )}
+
+        {/* ── [DIRECT] 받은 제안 ── */}
+        {expandedSection === 'direct' && (
+          <section className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 px-1 md:px-0">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-200/50 pb-4 md:border-none md:pb-0">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black text-amber-600 leading-tight flex items-center gap-2">
+                  <Sparkles size={24}/> {isEn ? "Direct Proposals" : "받은 제안"}
+                </h2>
+                {locale === 'ko' && (
+                  <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(DIRECT REQUESTS)</p>
+                )}
+              </div>
+            </div>
+
+            {directRequests.length === 0 ? (
+              <div className="p-12 md:p-20 bg-amber-50/30 rounded-[40px] border-2 border-dashed border-amber-200 text-center">
+                <Sparkles size={40} className="mx-auto text-amber-300 mb-4"/>
+                <p className="text-amber-700 font-bold">{isEn ? "No direct proposals yet." : "아직 받은 다이렉트 제안이 없습니다."}</p>
+                <p className="text-sm text-amber-600/70 mt-2 font-medium">
+                  {isEn 
+                    ? "Sellers can send you direct meeting requests even without an open schedule."
+                    : "셀러가 바이어님의 일정이 열려있지 않아도 직접 다이렉트로 미팅을 제안할 수 있습니다."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6">
+                {directRequests.map((req: any) => {
+                  const d = getSellerDisplay(req.seller);
+                  return (
+                    <div key={req.id} className="bg-white rounded-[24px] shadow-md border-2 border-amber-200/50 overflow-hidden flex flex-col transition-all hover:shadow-lg hover:border-amber-400 group relative">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
+                      
+                      <div className="p-5 md:p-6 pb-0 flex justify-between items-start">
+                        <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-[10px] text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-amber-200">
+                          <Rocket size={12}/> DIRECT PROPOSE
+                        </span>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isEn ? "Requested at" : "제안일"}</p>
+                            <p className="text-xs font-black text-slate-700">{formatDateWithDay(req.createdAt)}</p>
+                          </div>
+                          {req.pic && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100 shadow-sm">
+                              <UserCheck size={11} className="shrink-0" />
+                              <span className="text-[10px] font-black uppercase tracking-tight">
+                                {isEn ? "Assigned to:" : "담당자:"} {(isEn && req.pic.nameEn) ? req.pic.nameEn : req.pic.name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-5 md:p-6 flex flex-col gap-5 flex-1 relative z-10">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md">
+                            <Building2 size={24}/>
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-black text-xl text-slate-800 truncate">{d.companyName}</h4>
+                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1.5 truncate">
+                              <UserIcon size={14}/> {d.picName}
+                            </p>
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-bold mt-2 inline-block">
+                              {d.industry}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="bg-amber-50/50 p-4 rounded-[16px] border border-amber-100/50 flex-1">
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                            <FileText size={12}/> {isEn ? "Proposal Message" : "제안 메시지"}
+                          </p>
+                          <p className="text-sm text-slate-700 font-medium leading-relaxed italic line-clamp-3">
+                            "{req.proposal}"
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mt-auto pt-2">
+                          <button 
+                            onClick={() => setSelectedOnePager({ ...req.seller.onePager, user: req.seller, members: req.seller.members })}
+                            className="px-4 py-3 bg-slate-100 text-slate-700 text-[10px] font-black rounded-[14px] hover:bg-slate-200 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <Search size={13}/> {isEn ? "View Profile" : "프로필"}
+                          </button>
+                          {/* ── 숫자 카운트 채팅 배지 (Direct Proposals, LinkedIn 스타일) ── */}
+                          <button 
+                            onClick={() => setSelectedChatMeeting(req)}
+                            className={`relative px-4 py-3 border text-[10px] font-black rounded-[14px] transition-all flex items-center justify-center gap-1.5 ${unreadMeetings.includes(req.id) ? 'bg-rose-500 text-white border-rose-600 shadow-md shadow-rose-200 animate-[pulse_2s_infinite]' : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-600 hover:text-white'}`}
+                          >
+                            <MessageCircle size={13}/>
+                            {unreadMeetings.includes(req.id) ? (isEn ? "New Message!" : "새 메시지!") : (isEn ? "Chat" : "대화하기")}
+                          </button>
+                          <button 
+                            onClick={() => handleRejectDirect(req)}
+                            className="px-4 py-3 bg-white text-rose-500 border border-rose-100 text-[10px] font-black rounded-[14px] hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <XCircle size={13}/> {isEn ? "Reject" : "제안 거절"}
+                          </button>
+                          <button 
+                            onClick={() => setAcceptingDirect(req)}
+                            className="px-4 py-3 bg-amber-500 text-white text-[10px] font-black rounded-[14px] hover:bg-amber-600 transition-colors shadow-md shadow-amber-200 flex items-center justify-center gap-1.5"
+                          >
+                            <CheckCircle2 size={13}/> {isEn ? "Accept" : "수락/일정"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -1796,7 +2074,18 @@ export default function BuyerClient({
                       )}
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Industry Sector" : "산업 분야"}</p>
-                        <input name="industrySector" defaultValue={user.industrySector || user.onePager?.industrySector} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                        <div className="relative group">
+                          <select
+                            name="industrySector"
+                            defaultValue={user.industrySector || user.onePager?.industrySector || ""}
+                            className="w-full p-3.5 md:p-4 pr-12 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none rounded-[16px] text-sm font-bold transition-all appearance-none cursor-pointer text-slate-700 hover:border-indigo-300">
+                            <option value="" disabled>{isEn ? "Select industry" : "산업 분야 선택"}</option>
+                            {industryOptions.map(opt => (
+                              <option key={opt.ko} value={opt.ko}>{isEn ? opt.en : opt.ko}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors" />
+                        </div>
                       </div>
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Year Founded" : "설립연도"}</p>
@@ -1809,6 +2098,38 @@ export default function BuyerClient({
                       <div className="flex flex-col space-y-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Primary Tech" : "핵심 기술"}</p>
                         <input name="primaryTech" defaultValue={user.primaryTech || user.onePager?.primaryTech} className="w-full p-3.5 md:p-4 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 outline-none rounded-[16px] border text-sm font-bold transition-all"/>
+                      </div>
+
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Primary Activity Region" : "기본 활동 권역"}</p>
+                        <div className="relative group">
+                          <select
+                            name="primaryRegion"
+                            defaultValue={user.primaryRegion || ""}
+                            className="w-full p-3.5 md:p-4 pr-12 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none rounded-[16px] text-sm font-bold transition-all appearance-none cursor-pointer text-slate-700 hover:border-indigo-300">
+                            <option value="" disabled>{isEn ? "Select region" : "권역 선택"}</option>
+                            {regionOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>{isEn ? opt.en : opt.ko}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors" />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Secondary Activity Region" : "추가 활동 권역"}</p>
+                        <div className="relative group">
+                          <select
+                            name="secondaryRegion"
+                            defaultValue={user.secondaryRegion || ""}
+                            className="w-full p-3.5 md:p-4 pr-12 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none rounded-[16px] text-sm font-bold transition-all appearance-none cursor-pointer text-slate-700 hover:border-indigo-300">
+                            <option value="">{isEn ? "None" : "추가 권역 없음"}</option>
+                            {regionOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>{isEn ? opt.en : opt.ko}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors" />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2527,6 +2848,108 @@ export default function BuyerClient({
         );
       })()}
 
+      {/* ── 다이렉트 미팅 제안 매핑 모달 ── */}
+      {acceptingDirect && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setAcceptingDirect(null)} />
+          <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl relative w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 pb-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <CheckCircle2 className="text-amber-500" size={24}/>
+                {isEn ? "Accept Direct Proposal" : "제안 수락 및 일정 선택"}
+              </h3>
+              <button onClick={() => setAcceptingDirect(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors active:scale-95">
+                <X size={20}/>
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
+              <div>
+                <p className="text-sm font-bold text-slate-500 mb-2">
+                  {isEn ? "Select an open time slot to assign this meeting." : "비어있는 오픈 스케줄을 선택해 해당 미팅을 매핑해주세요."}
+                </p>
+                <div className="space-y-3 mt-4">
+                  {mySlots.filter((slot: any) => slot.status === 'OPEN').length === 0 ? (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center font-bold text-slate-500 text-sm">
+                      {isEn ? "No open slots available. Please create a new slot." : "사용 가능한 빈 스케줄이 없습니다. 제너레이터 탭에서 스케줄을 먼저 생성해주세요."}
+                    </div>
+                  ) : (
+                    mySlots.filter((slot: any) => slot.status === 'OPEN').map((slot: any) => (
+                      <label key={slot.id} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${acceptMappingSlotId === String(slot.id) ? 'border-amber-500 bg-amber-50' : 'border-slate-100 hover:border-amber-200'}`}>
+                        <input
+                          type="radio"
+                          name="slotMapping"
+                          value={String(slot.id)}
+                          checked={acceptMappingSlotId === String(slot.id)}
+                          onChange={e => setAcceptMappingSlotId(e.target.value)}
+                          className="w-5 h-5 accent-amber-500"
+                        />
+                        <div className="flex flex-col">
+                          <span className="font-black text-slate-700">
+                            {formatDateWithDay(slot.startTime)} {new Date(slot.startTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} - {new Date(slot.endTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                          </span>
+                          {slot.location && slot.location !== TBA_VALUE && <span className="text-[10px] text-slate-500 font-bold">{slot.location}</span>}
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 pt-0 bg-slate-50/50 flex flex-col gap-3 mt-4">
+              <button 
+                onClick={() => {
+                  setAcceptingDirect(null);
+                  handleTabClick('generator');
+                }}
+                className="w-full py-4 bg-white border-2 border-indigo-100 text-indigo-600 rounded-[16px] font-black text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Plus size={18}/> {isEn ? "Create New Slot First" : "새로운 오픈 상담 일정 생성하기"}
+              </button>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setAcceptingDirect(null)}
+                  className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98]"
+                >
+                  {t.common.cancel}
+                </button>
+                <button 
+                  onClick={handleConfirmDirectMapping}
+                  disabled={!acceptMappingSlotId || isPending}
+                  className="flex-[2] py-4 bg-gradient-to-tr from-amber-500 to-amber-400 text-white rounded-[16px] font-black text-sm hover:from-amber-600 hover:to-amber-500 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg shadow-amber-200"
+                >
+                  {isPending ? <RefreshCw className="animate-spin" size={16}/> : <CheckCircle2 size={16}/>}
+                  {isEn ? "Assign & Confirm" : "선택 스케줄에 매핑 확정"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Meeting Chat Modal ── */}
+      {selectedChatMeeting && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedChatMeeting(null)} />
+          <div className="bg-white rounded-[24px] sm:rounded-[32px] shadow-2xl relative w-full max-w-[450px] max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <MessageCircle className="text-indigo-500" size={24}/>
+                {isEn ? "Meeting Chat" : "대화방"}
+              </h3>
+              <button onClick={() => setSelectedChatMeeting(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors active:scale-95">
+                <X size={20}/>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden p-3 sm:p-6 bg-white">
+              <MeetingChat meetingId={selectedChatMeeting.id} currentUser={user} isEn={isEn} meeting={selectedChatMeeting} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 스크롤바 CSS */}
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
@@ -2536,6 +2959,15 @@ export default function BuyerClient({
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+        @keyframes pulse-red {
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+          70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(244, 63, 94, 0); }
+          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        }
+        .animate-pulse-red {
+          animation: pulse-red 2s infinite;
+        }
       `}} />
     </div>
   );

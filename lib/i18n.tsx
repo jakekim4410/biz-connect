@@ -48,6 +48,19 @@ export const translations = {
       errorRejected: "가입이 거절된 계정입니다. 관리자에게 문의해주세요.",
       errorGeneral: "로그인 중 오류가 발생했습니다.",
     },
+    // 역할 선택 (어드민용)
+    selectRole: {
+      title: "대시보드 선택",
+      subtitle: "접근할 대시보드 유형을 선택해주세요.",
+      adminTitle: "관리자 콘솔",
+      adminDesc: "전체 사용자 및 매칭 시스템 관리",
+      buyerTitle: "바이어 대시보드",
+      buyerDesc: "셀러 탐색 및 미팅 슬롯 관리",
+      sellerTitle: "셀러 대시보드",
+      sellerDesc: "매칭 탐색 및 미팅 신청 현황",
+      greeting: "어드민으로 로그인되었습니다",
+      goBtn: "이동하기",
+    },
     // 회원가입
     register: {
       title: "BizConnect 가입",
@@ -69,6 +82,10 @@ export const translations = {
       confirmPasswordLabel: "비밀번호 확인",
       confirmPasswordMatch: "✓ 비밀번호가 일치합니다.",
       confirmPasswordMismatch: "비밀번호가 일치하지 않습니다.",
+      forgotPasswordLink: "비밀번호를 잊으셨나요?",
+      primaryRegionLabel: "주 활동 권역 (1안)",
+      secondaryRegionLabel: "추가 활동/관심 권역 (2안)",
+      regionPlaceholder: "권역을 선택해주세요",
       companyLabel: "회사명 (Company)",
       companyPlaceholder: "회사명을 입력하세요",
       companyConfirmed: "✓ 기존 등록된 회사입니다. 비즈니스 정보가 자동 연계됩니다.",
@@ -184,6 +201,11 @@ export const translations = {
         userTypeLabel: "회원 유형",
         preferredLabel: "관심 산업군 및 선호 파트너",
         saveBtn: "정보 저장하기",
+      },
+      rejection: {
+        matchedOther: "타기업 매칭",
+        cancelledByBuyer: "바이어/VC가 예약을 취소하였습니다.",
+        defaultReason: "사유가 입력되지 않았습니다.",
       },
     },
     // 셀러 대시보드
@@ -303,6 +325,18 @@ export const translations = {
       errorRejected: "Your account has been rejected. Please contact the administrator.",
       errorGeneral: "An error occurred during sign in.",
     },
+    selectRole: {
+      title: "Select Dashboard",
+      subtitle: "Choose the dashboard type you want to access.",
+      adminTitle: "Admin Console",
+      adminDesc: "Manage all users and the matching system",
+      buyerTitle: "Buyer Dashboard",
+      buyerDesc: "Explore sellers and manage meeting slots",
+      sellerTitle: "Seller Dashboard",
+      sellerDesc: "Explore matches and track meeting applications",
+      greeting: "Logged in as Administrator",
+      goBtn: "Go",
+    },
     register: {
       title: "Join BizConnect",
       subtitle: "Personal Account Registration",
@@ -323,6 +357,10 @@ export const translations = {
       confirmPasswordLabel: "Confirm Password",
       confirmPasswordMatch: "✓ Passwords match.",
       confirmPasswordMismatch: "Passwords do not match.",
+      forgotPasswordLink: "Forgot your password?",
+      primaryRegionLabel: "Primary Activity Region",
+      secondaryRegionLabel: "Secondary Activity Region",
+      regionPlaceholder: "Select Region",
       companyLabel: "Company Name",
       companyPlaceholder: "Enter your company name",
       companyConfirmed: "✓ Existing company found. Business info will be linked automatically.",
@@ -360,7 +398,7 @@ export const translations = {
       linkedinLabel: "LinkedIn Profile",
       linkedinHint: "Adding your LinkedIn URL helps improve business matching accuracy.",
     },
-    buyer: {
+    401: {
       nav: {
         directory: "Explore",
         pending: "Reservations",
@@ -437,6 +475,11 @@ export const translations = {
         userTypeLabel: "Member Type",
         preferredLabel: "Interests & Preferred Partners",
         saveBtn: "Save Changes",
+      },
+      rejection: {
+        matchedOther: "Matched with another company",
+        cancelledByBuyer: "The Buyer/VC has cancelled the reservation.",
+        defaultReason: "No reason provided.",
       },
     },
     seller: {
@@ -535,7 +578,7 @@ export const I18nContext = createContext<I18nContextType>({
   locale: "ko",
   hasSelectedLocale: true,
   isInitialized: false,
-  setLocale: () => {},
+  setLocale: () => { },
   t: translations.ko,
 });
 
@@ -571,3 +614,39 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 export function useI18n() {
   return useContext(I18nContext);
 }
+
+// --- [추가] 활동 권역 리스트 ---
+export const regionOptions = [
+  { value: "GLOBAL", ko: "글로벌 전체 (Global)", en: "Global" },
+  { value: "KOREA", ko: "대한민국 (South Korea)", en: "South Korea" },
+  { value: "NORTH_AMERICA", ko: "북미 (North America)", en: "North America" },
+  { value: "EUROPE", ko: "유럽 (Europe)", en: "Europe" },
+  { value: "APAC", ko: "아시아 태평양 (APAC)", en: "Asia-Pacific (APAC)" },
+  { value: "SEA", ko: "동남아시아 (South East Asia)", en: "South East Asia" },
+  { value: "CHINA", ko: "중국 (China)", en: "China" },
+  { value: "JAPAN", ko: "일본 (Japan)", en: "Japan" },
+  { value: "MIDDLE_EAST", ko: "중동/아중동 (Middle East)", en: "Middle East" },
+  { value: "LATIN_AMERICA", ko: "중남미 (Latin America)", en: "Latin America" },
+];
+
+// --- [추가] 산업 분야 리스트 ---
+export const industryOptions = [
+  { ko: "인공지능 (AI & Big Data)", en: "AI & Big Data" },
+  { ko: "핀테크 (Fintech)", en: "Fintech" },
+  { ko: "바이오/헬스케어 (Bio & Healthcare)", en: "Bio & Healthcare" },
+  { ko: "이커머스/물류 (E-commerce & Logistics)", en: "E-commerce & Logistics" },
+  { ko: "에듀테크 (Edtech)", en: "Edtech" },
+  { ko: "모빌리티/자율주행 (Mobility & Auto)", en: "Mobility & Autonomous Driving" },
+  { ko: "프롭테크/부동산 (Proptech)", en: "Proptech & Real Estate" },
+  { ko: "SaaS/B2B 솔루션 (SaaS & B2B)", en: "SaaS & B2B Solutions" },
+  { ko: "ESG/클린테크 (ESG & Cleantech)", en: "ESG & Cleantech" },
+  { ko: "로보틱스/딥테크 (Robotics & Deeptech)", en: "Robotics & Deeptech" },
+  { ko: "콘텐츠/엔터테인먼트 (Content & Entertainment)", en: "Content & Entertainment" },
+  { ko: "기타 (Others)", en: "Others" },
+];
+
+// --- [추가] 회원 유형 리스트 ---
+export const userTypeOptions = {
+  ko: ["VC", "AC", "바이어", "스타트업", "기타"],
+  en: ["VC", "AC", "Buyer", "Startup", "Other"],
+};

@@ -99,7 +99,7 @@ Do NOT use Korean in any field value. This is non-negotiable.`;
 
   let candidates: any[] = [];
 
-  // 후보군 추출 및 모든 상세 필드 매핑 로직 - 기존 기능 유지
+  // 후보군 추출 및 모든 상세 필드 매핑 로직
   if (searchRole === "SELLER") {
     const onePagers = await db.onePager.findMany({
       include: {
@@ -109,25 +109,35 @@ Do NOT use Korean in any field value. This is non-negotiable.`;
         user: { role: "SELLER" },
       },
     });
-    candidates = onePagers.map((op) => ({
-      companyNameKr: op.companyNameKr || op.user?.companyName || "미등록",
-      companyNameEn: op.companyNameEn || "",
-      productType: op.productType || "미등록",
-      solutionSummary: op.solutionSummary || "정보 없음",
-      problem: op.problem || "정보 없음",
-      solution: op.solution || "정보 없음",
-      traction: op.traction || "정보 없음",
-      bizModel: op.bizModel || "정보 없음",
-      primaryTech: op.primaryTech || "정보 없음",
-      industrySector: op.industrySector || "미지정",
-      yearFounded: op.yearFounded || "미등록",
-      investmentStage: op.investmentStage || "미정",
-      monthlyRevenue: op.monthlyRevenue || "정보 없음",
-    }));
+    
+    // 회사명 기준으로 중복 제거
+    const uniqueMap = new Map();
+    for (const op of onePagers) {
+      const compName = op.companyNameKr || op.user?.companyName || "미등록";
+      if (!uniqueMap.has(compName)) {
+        uniqueMap.set(compName, {
+          companyNameKr: compName,
+          companyNameEn: op.companyNameEn || "",
+          productType: op.productType || "미등록",
+          solutionSummary: op.solutionSummary || "정보 없음",
+          problem: op.problem || "정보 없음",
+          solution: op.solution || "정보 없음",
+          traction: op.traction || "정보 없음",
+          bizModel: op.bizModel || "정보 없음",
+          primaryTech: op.primaryTech || "정보 없음",
+          industrySector: op.industrySector || "미지정",
+          yearFounded: op.yearFounded || "미등록",
+          investmentStage: op.investmentStage || "미정",
+          monthlyRevenue: op.monthlyRevenue || "정보 없음",
+        });
+      }
+    }
+    candidates = Array.from(uniqueMap.values());
   } else if (searchRole === "BUYER") {
     const buyers = await db.user.findMany({
       where: { role: "BUYER" },
       select: {
+        id: true,
         companyName: true,
         jobTitle: true,
         userType: true,
@@ -135,7 +145,15 @@ Do NOT use Korean in any field value. This is non-negotiable.`;
         preferredPartners: true,
       },
     });
-    candidates = buyers;
+    
+    // 회사명 기준으로 중복 제거
+    const uniqueMap = new Map();
+    for (const buyer of buyers) {
+      if (!uniqueMap.has(buyer.companyName)) {
+        uniqueMap.set(buyer.companyName, buyer);
+      }
+    }
+    candidates = Array.from(uniqueMap.values());
   }
 
   if (candidates.length === 0) {
