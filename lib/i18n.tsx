@@ -398,7 +398,7 @@ export const translations = {
       linkedinLabel: "LinkedIn Profile",
       linkedinHint: "Adding your LinkedIn URL helps improve business matching accuracy.",
     },
-    401: {
+    buyer: {
       nav: {
         directory: "Explore",
         pending: "Reservations",
