@@ -661,7 +661,7 @@ export default function SellerClient({
   const [buyerMembers, setBuyerMembers] = useState<any[]>([]);
   const [buyerMembersLoading, setBuyerMembersLoading] = useState(false);
 
-  const handleOpenApplyModal = (slot: any) => {
+  const handleOpenApplyModal = (slot: any, isAiSearch: boolean = false) => {
     const companyName = slot.buyer?.companyName || "";
     const matchedSlots = availableSlots.filter((s: any) =>
       isCompanyMatch(s.buyer?.companyName || "", companyName)
@@ -676,9 +676,16 @@ export default function SellerClient({
     };
 
     if (matchedSlots.length > 0) {
-      setApplyingSlots([...matchedSlots, directRequestSlot]);
+      // ✅ AI 검색 결과인 경우만 다이렉트 제안(ID: -1)을 추가함
+      const finalSlots = isAiSearch ? [...matchedSlots, directRequestSlot] : matchedSlots;
+      setApplyingSlots(finalSlots);
+      
+      // ✅ 만약 일반 탐색인데 선택한 슬롯이 -1(다이렉트)이라면 (비정상 케이스), 
+      // 첫 번째 실제 슬롯으로 강제 변경하거나 모달을 닫아야 함.
+      // 하지만 여기서는 전달받은 slot이 이미 실제 슬롯이므로 그대로 사용.
       setApplyingSlot(slot);
       setSelectedSlotId(slot.id);
+      
       if (slot.id !== -1) {
         setSelectedPicId(slot.buyerId);
         setIsPicLocked(true);
@@ -687,11 +694,16 @@ export default function SellerClient({
         setIsPicLocked(false);
       }
     } else {
-      setApplyingSlots([directRequestSlot]);
-      setApplyingSlot(directRequestSlot);
-      setSelectedSlotId(-1);
-      setSelectedPicId(null);
-      setIsPicLocked(false);
+      // 슬롯이 없는 경우인데 AI 검색인 경우만 다이렉트 신청 허용
+      if (isAiSearch) {
+        setApplyingSlots([directRequestSlot]);
+        setApplyingSlot(directRequestSlot);
+        setSelectedSlotId(-1);
+        setSelectedPicId(null);
+        setIsPicLocked(false);
+      } else {
+        alert(isEn ? "No available slots for this buyer." : "신청 가능한 슬롯이 없습니다.");
+      }
     }
   };
 
@@ -1968,7 +1980,7 @@ export default function SellerClient({
                   isMatched={(companyName) => true}
                   onViewOnePager={(companyName) => {
                     const dummySlot = { buyer: { companyName } };
-                    handleOpenApplyModal(dummySlot);
+                    handleOpenApplyModal(dummySlot, true);
                   }}
                   onePagerLabel={t.seller.available.applyBtn}
                 />
@@ -2085,7 +2097,7 @@ export default function SellerClient({
                                     </span>
                                   )}
                                   <button
-                                    onClick={() => handleOpenApplyModal(slot)}
+                                    onClick={() => handleOpenApplyModal(slot, false)}
                                     className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black hover:bg-indigo-600 transition-all shadow-md shadow-slate-100 flex items-center gap-2 group-hover:scale-105"
                                   >
                                     <Send size={14} />

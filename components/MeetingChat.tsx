@@ -104,22 +104,56 @@ export default function MeetingChat({ meetingId, currentUser, isEn, meeting }: a
     return (isEn && entity.companyNameEn) ? entity.companyNameEn : (entity.companyName || "-");
   };
 
-  // 메시지 그룹화 로직 (동일 발신자, 5분 이내 연속 메시지)
+  // 메시지 그룹화 및 날짜 구분 로직
   const groupedMessages = useMemo(() => {
     return messages.map((msg, index) => {
       const prevMsg = messages[index - 1];
-      const isSameSender = prevMsg && prevMsg.senderId === msg.senderId;
+      const prevDate = prevMsg ? new Date(prevMsg.createdAt) : null;
+      const currDate = new Date(msg.createdAt);
       
-      const prevTime = prevMsg ? new Date(prevMsg.createdAt).getTime() : 0;
-      const currTime = new Date(msg.createdAt).getTime();
+      const isSameDay = prevDate && 
+        prevDate.getFullYear() === currDate.getFullYear() &&
+        prevDate.getMonth() === currDate.getMonth() &&
+        prevDate.getDate() === currDate.getDate();
+        
+      const isSameSender = prevMsg && prevMsg.senderId === msg.senderId;
+      const prevTime = prevDate ? prevDate.getTime() : 0;
+      const currTime = currDate.getTime();
       const isWithinTime = (currTime - prevTime) < 1000 * 60 * 5; // 5분 이내
       
       return {
         ...msg,
-        isGrouped: isSameSender && isWithinTime
+        isGrouped: isSameSender && isWithinTime && isSameDay,
+        showDateSeparator: !isSameDay,
+        msgDate: currDate
       };
     });
   }, [messages]);
+
+  const formatTime = (date: Date) => {
+    try {
+      return date.toLocaleTimeString(isEn ? 'en-US' : 'ko-KR', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const formatDateLabel = (date: Date) => {
+    try {
+      return date.toLocaleDateString(isEn ? 'en-US' : 'ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      });
+    } catch (e) {
+      return "";
+    }
+  };
 
   if (loading) return (
     <div className="h-[500px] flex items-center justify-center bg-slate-50/50 rounded-[32px] border border-slate-100 italic font-bold text-slate-300">
@@ -184,40 +218,53 @@ export default function MeetingChat({ meetingId, currentUser, isEn, meeting }: a
             </div>
           </div>
         ) : (
-          groupedMessages.map((msg, i) => {
+          groupedMessages.map((msg: any, i) => {
             const isMe = msg.senderId === currentUser?.id;
             const senderName = isEn ? (msg.sender.nameEn || msg.sender.name) : msg.sender.name;
             const showMetadata = !msg.isGrouped;
-            const msgDate = new Date(msg.createdAt);
+            const msgDate = msg.msgDate;
             
             return (
-              <div key={msg.id} className={`flex flex-col ${showMetadata ? 'mt-5' : 'mt-0.5'} ${isMe ? "items-end" : "items-start"}`}>
-                
-                {/* 발신자 정보 (그룹화 안된 경우에만) */}
-                {showMetadata && !isMe && (
-                  <div className="flex items-center gap-2 mb-1.5 ml-1">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 font-black text-[10px] text-indigo-600 shadow-sm uppercase">
-                      {msg.sender.companyName?.[0] || 'S'}
+              <React.Fragment key={msg.id}>
+                {/* 날짜 구분선 */}
+                {msg.showDateSeparator && (
+                  <div className="flex items-center justify-center my-8">
+                    <div className="flex-1 h-[1px] bg-slate-100"></div>
+                    <div className="px-4 py-1.5 bg-slate-100/50 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest mx-4">
+                      {formatDateLabel(msgDate)}
                     </div>
-                    <span className="text-[11px] font-black text-slate-600">{msg.sender.companyName} <span className="text-slate-400 font-bold opacity-70">· {senderName}</span></span>
+                    <div className="flex-1 h-[1px] bg-slate-100"></div>
                   </div>
                 )}
 
-                {/* 메시지 본문 */}
-                <div className="group relative max-w-[85%] flex items-end gap-2">
-                  {isMe && <span className="text-[9px] font-bold text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap mb-1">{msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                <div className={`flex flex-col ${showMetadata ? 'mt-5' : 'mt-0.5'} ${isMe ? "items-end" : "items-start"}`}>
                   
-                  <div className={`px-4 py-2.5 rounded-[20px] text-[13px] font-bold leading-relaxed shadow-sm transition-all duration-300 ${
-                    isMe 
-                      ? 'bg-indigo-600 text-white rounded-tr-[4px] hover:shadow-lg hover:shadow-indigo-200' 
-                      : 'bg-white text-slate-700 border border-slate-100 rounded-tl-[4px] hover:shadow-md hover:border-slate-200'
-                  } ${msg.isGrouped && !isMe ? 'rounded-tl-[20px]' : ''} ${msg.isGrouped && isMe ? 'rounded-tr-[20px]' : ''}`}>
-                    {msg.content}
-                  </div>
+                  {/* 발신자 정보 (그룹화 안된 경우에만) */}
+                  {showMetadata && !isMe && (
+                    <div className="flex items-center gap-2 mb-1.5 ml-1">
+                      <div className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 font-black text-[10px] text-indigo-600 shadow-sm uppercase">
+                        {msg.sender.companyName?.[0] || 'S'}
+                      </div>
+                      <span className="text-[11px] font-black text-slate-600">{msg.sender.companyName} <span className="text-slate-400 font-bold opacity-70">· {senderName}</span></span>
+                    </div>
+                  )}
 
-                  {!isMe && <span className="text-[9px] font-bold text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap mb-1">{msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                  {/* 메시지 본문 */}
+                  <div className={`group relative max-w-[85%] flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className={`px-4 py-2.5 rounded-[20px] text-[13px] font-bold leading-relaxed shadow-sm transition-all duration-300 ${
+                      isMe 
+                        ? 'bg-indigo-600 text-white rounded-tr-[4px] hover:shadow-lg hover:shadow-indigo-200' 
+                        : 'bg-white text-slate-700 border border-slate-100 rounded-tl-[4px] hover:shadow-md hover:border-slate-200'
+                    } ${msg.isGrouped && !isMe ? 'rounded-tl-[20px]' : ''} ${msg.isGrouped && isMe ? 'rounded-tr-[20px]' : ''}`}>
+                      {msg.content}
+                    </div>
+
+                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap mb-1 opacity-100 min-w-fit">
+                      {formatTime(msgDate)}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              </React.Fragment>
             );
           })
         )}
