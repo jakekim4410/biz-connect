@@ -2559,6 +2559,7 @@ export default function SellerClient({
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
                               <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Partner" : "파트너사"}</th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Applied PIC" : "신청 담당자"}</th>
                               <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Applied Schedule" : "신청 일정"}</th>
                               <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Reason" : "거절 사유"}</th>
                               <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{isEn ? "Chat" : "채팅"}</th>
@@ -2591,6 +2592,14 @@ export default function SellerClient({
                                     </div>
                                   </td>
                                   <td className="px-6 py-6 whitespace-nowrap">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs font-bold text-slate-700">
+                                        {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-bold mt-0.5">{displayJobTitle(m.buyer) || "N/A"}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-6 whitespace-nowrap">
                                     <div className="text-[13px] font-black text-slate-700">{m.timeSlot?.status === "TBD" ? (isEn ? "TBD" : "미정") : formatDateWithDay(m.timeSlot?.startTime)}</div>
                                     <div className="text-[11px] font-bold text-slate-500 mt-0.5">{m.timeSlot?.status === "TBD" ? "" : formatTime24And12(m.timeSlot?.startTime || "")}</div>
                                   </td>
@@ -2605,10 +2614,14 @@ export default function SellerClient({
                                     </p>
                                   </td>
                                   <td className="px-6 py-6 text-right">
-                                    <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-2.5 rounded-xl transition-all ${unreadMeetings.includes(m.id) ? 'bg-rose-500 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600'}`}>
-                                      <MessageCircle size={18} />
-                                      {unreadMeetings.includes(m.id) && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>}
-                                    </button>
+                                    {user.isMaster ? (
+                                      <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-2.5 rounded-xl transition-all ${unreadMeetings.includes(m.id) ? 'bg-rose-500 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600'}`}>
+                                        <MessageCircle size={18} />
+                                        {unreadMeetings.includes(m.id) && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>}
+                                      </button>
+                                    ) : (
+                                      <span className="text-[9px] font-black text-slate-300 uppercase italic tracking-widest whitespace-nowrap">{isEn ? "ReadOnly" : "조회 전용"}</span>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -2646,7 +2659,17 @@ export default function SellerClient({
                                   </p>
                                 </div>
                               </div>
-                              {isExpired ? (
+                              {user.isMaster ? (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
+                                  className={`h-9 px-3 rounded-2xl shadow-sm border transition-all flex items-center gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white animate-[pulse_2s_infinite] shadow-rose-200' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white'}`}
+                                >
+                                  <MessageCircle size={18} />
+                                  {unreadMeetings.includes(m.id) && (
+                                    <span className="text-[10px] font-black uppercase animate-pulse">{isEn ? 'New' : '새 메시지'}</span>
+                                  )}
+                                </button>
+                              ) : isExpired ? (
                                 <div className="flex items-center gap-2 ml-2">
                                   {isNewRejected && (
                                     <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-amber-200 shrink-0">NEW</span>
