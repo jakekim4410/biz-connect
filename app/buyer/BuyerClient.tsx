@@ -754,8 +754,7 @@ export default function BuyerClient({
     pending: mySlots.reduce((acc: number, s: any) =>
       acc + s.meetings.filter((m: any) => m.status !== 'REJECTED' && unreadMeetings.includes(m.id)).length, 0),
     confirmed: confirmedMeetings.filter((m: any) => m.status === 'CONFIRMED' && unreadMeetings.includes(m.id)).length,
-    rejected: (rejectedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length)
-      + Math.max(0, (rejectedMeetings?.length || 0) - seenCounts.rejected),
+    rejected: Math.max(0, (rejectedMeetings?.length || 0) - seenCounts.rejected),
   };
 
   const toAlertCount = (n: number) => n <= 0 ? null : n > 99 ? '99+' : String(n);
@@ -1308,7 +1307,7 @@ export default function BuyerClient({
                               </div>
                             </td>
                             <td className="px-6 py-6 text-right">
-                              {isMine && (
+                              {(isMine || user.isMaster) && (
                                 <button
                                   onClick={() => setSelectedChatMeeting(m)}
                                   className={`relative p-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${unreadMeetings.includes(m.id) ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200'}`}
@@ -1452,7 +1451,7 @@ export default function BuyerClient({
                               </p>
                             </td>
                             <td className="px-6 py-6 text-right">
-                              {isMine && (
+                              {(isMine || user.isMaster) && (
                                 <button onClick={() => setSelectedChatMeeting(m)} className={`p-2.5 rounded-xl transition-all relative ${hasNew ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
                                   <MessageCircle size={18} />
                                   {hasNew && <span className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white"></span>}
@@ -1479,7 +1478,7 @@ export default function BuyerClient({
                             <p className="text-lg font-black text-slate-800 mt-2">{formatDateWithDay(m.timeSlot?.startTime)}</p>
                             <p className="text-sm font-bold text-slate-400">{m.timeSlot?.startTime ? formatTime24And12(m.timeSlot.startTime) : 'N/A'}</p>
                           </div>
-                          {isMine && (
+                          {(isMine || user.isMaster) && (
                             <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-3 rounded-xl transition-all ${hasNew ? 'bg-rose-500 text-white shadow-lg' : 'bg-white border border-slate-100 text-slate-400'}`}>
                               <MessageCircle size={20} />
                               {hasNew && <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500"></span></span>}
@@ -1683,7 +1682,7 @@ export default function BuyerClient({
                                         {t.buyer.pending.detailReview}
                                       </button>
                                     )}
-                                    {isMine && (
+                                    {(isMine || user.isMaster) && (
                                       <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-2 rounded-lg transition-all ${hasNew ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
                                         <MessageCircle size={16} />
                                         {hasNew && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span></span>}
@@ -1824,7 +1823,7 @@ export default function BuyerClient({
                                         <span className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.1em] border border-emerald-600 shadow-lg shadow-emerald-100 antialiased pt-[6px]"><CheckCircle2 size={14} /> {isEn ? 'MATCHED' : '매칭됨'}</span>
                                       </div>
                                     ) : null}
-                                    {isMine && (
+                                    {(isMine || user.isMaster) && (
                                       <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-2.5 rounded-xl transition-all shrink-0 ${hasNew ? 'bg-rose-500 text-white shadow-lg' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
                                         <MessageCircle size={18} />
                                         {hasNew && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span></span>}

@@ -21,19 +21,40 @@ export default async function SellerPage() {
   if (!user) redirect("/login");
 
   const confirmedMeetings = await db.meeting.findMany({
-    where: { sellerId, status: { in: ["ACCEPTED", "CONFIRMED"] } },
+    where: { 
+      status: { in: ["ACCEPTED", "CONFIRMED"] },
+      ...(user.isMaster ? {
+        seller: { companyName: user.companyName }
+      } : {
+        sellerId: sellerId
+      })
+    },
     include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { timeSlot: { startTime: 'asc' } }
   });
 
   const pendingMeetings = await db.meeting.findMany({
-    where: { sellerId, status: "PENDING" },
+    where: { 
+      status: "PENDING",
+      ...(user.isMaster ? {
+        seller: { companyName: user.companyName }
+      } : {
+        sellerId: sellerId
+      })
+    },
     include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { createdAt: 'desc' }
   });
 
   const rejectedMeetings = await db.meeting.findMany({
-    where: { sellerId, status: { in: ["REJECTED", "CANCELLED"] } },
+    where: { 
+      status: { in: ["REJECTED", "CANCELLED"] },
+      ...(user.isMaster ? {
+        seller: { companyName: user.companyName }
+      } : {
+        sellerId: sellerId
+      })
+    },
     include: { timeSlot: true, buyer: true, pic: true },
     orderBy: { createdAt: 'desc' }
   });
