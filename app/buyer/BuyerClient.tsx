@@ -84,8 +84,9 @@ export default function BuyerClient({
   const [directoryViewMode, setDirectoryViewMode] = useState<'table' | 'card'>('card'); // 기본 카드뷰
   const [rejectedViewMode, setRejectedViewMode] = useState<'table' | 'card'>('table'); // 기본 테이블뷰
 
-  const [counts, setCounts] = useState({ sellers: 0, confirmed: 0, requests: 0, direct: 0 });
-  const [alerts, setAlerts] = useState({ directory: false, confirmed: false, pending: false, direct: false });
+  const [counts, setCounts] = useState({ sellers: 0, confirmed: 0, requests: 0, direct: 0, rejected: 0 });
+  const [alerts, setAlerts] = useState({ directory: false, confirmed: false, pending: false, direct: false, rejected: false });
+  const [seenCounts, setSeenCounts] = useState({ rejected: 0 });
 
   const [editSelectedType, setEditSelectedType] = useState(
     ["VC", "AC", "바이어", "스타트업", "기타"].includes(user?.userType) ? user?.userType : (user?.userType ? "기타" : "VC")
@@ -250,8 +251,15 @@ export default function BuyerClient({
       sellers: allSellers?.length || 0,
       confirmed: upcomingConfirmed,
       requests: mySlots?.reduce((acc: number, slot: any) => acc + (slot.meetings?.length || 0), 0) || 0,
-      direct: directRequests?.length || 0
+      direct: directRequests?.length || 0,
+      rejected: rejectedMeetings?.length || 0
     });
+
+    if (user?.id) {
+      setSeenCounts({
+        rejected: parseInt(localStorage.getItem(`seen_rejected_${user.id}`) || '0', 10)
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -260,14 +268,23 @@ export default function BuyerClient({
     const currentConfirmed = confirmedMeetings?.length || 0;
     const currentRequests = mySlots?.reduce((acc: number, slot: any) => acc + (slot.meetings?.length || 0), 0) || 0;
     const currentDirect = directRequests?.length || 0;
+    const currentRejected = rejectedMeetings?.length || 0;
+
     setAlerts(prev => ({
       directory: prev.directory || currentSellers > counts.sellers,
       confirmed: prev.confirmed || currentConfirmed > counts.confirmed,
       pending: prev.pending || currentRequests > counts.requests,
-      direct: prev.direct || currentDirect > counts.direct
+      direct: prev.direct || currentDirect > counts.direct,
+      rejected: prev.rejected || currentRejected > counts.rejected
     }));
-    setCounts({ sellers: currentSellers, confirmed: currentConfirmed, requests: currentRequests, direct: currentDirect });
-  }, [allSellers, confirmedMeetings, mySlots, directRequests]);
+    setCounts({ 
+      sellers: currentSellers, 
+      confirmed: currentConfirmed, 
+      requests: currentRequests, 
+      direct: currentDirect,
+      rejected: currentRejected 
+    });
+  }, [allSellers, confirmedMeetings, mySlots, directRequests, rejectedMeetings]);
 
   // editingSlot이 열릴 때 미팅 타입 / 장소값 / TBA / note 초기화
   useEffect(() => {
@@ -307,6 +324,12 @@ export default function BuyerClient({
     setExpandedSection(id);
     if ((alerts as any)[id]) {
       setAlerts(prev => ({ ...prev, [id]: false }));
+    }
+    // [ADD] 거절 내역 확인 시 seenCounts 업데이트 및 localStorage 저장
+    if (id === 'rejected' && user?.id) {
+      const currentCount = rejectedMeetings?.length || 0;
+      setSeenCounts(prev => ({ ...prev, rejected: currentCount }));
+      localStorage.setItem(`seen_rejected_${user.id}`, currentCount.toString());
     }
   };
 
@@ -725,7 +748,8 @@ export default function BuyerClient({
     pending: mySlots.reduce((acc: number, s: any) =>
       acc + s.meetings.filter((m: any) => m.status !== 'REJECTED' && unreadMeetings.includes(m.id)).length, 0),
     confirmed: confirmedMeetings.filter((m: any) => m.status === 'CONFIRMED' && unreadMeetings.includes(m.id)).length,
-    rejected: rejectedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length,
+    rejected: (rejectedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length)
+      + Math.max(0, (rejectedMeetings?.length || 0) - seenCounts.rejected),
   };
 
   const toAlertCount = (n: number) => n <= 0 ? null : n > 99 ? '99+' : String(n);
