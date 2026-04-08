@@ -66,8 +66,16 @@ export async function applyMeetingAction(formData: FormData, sellerId: number) {
         buyer.preferredLanguage || "ko"
       );
     }
-  } else {
     // 일반 미팅 신청 (기존 열린 슬롯 매칭)
+    const slot = await db.timeSlot.findUnique({
+      where: { id: slotId },
+      select: { startTime: true }
+    });
+
+    if (slot && slot.startTime < new Date()) {
+      throw new Error("이미 활동 시간이 지난 슬롯입니다.");
+    }
+
     await db.meeting.create({
       data: { 
         timeSlotId: slotId, 

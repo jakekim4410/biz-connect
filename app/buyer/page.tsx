@@ -13,83 +13,114 @@ export default async function BuyerPage() {
   }
 
   const buyerId = Number((session.user as any).id);
+  const companyName = (session.user as any).companyName;
 
-  // 지난 일정 미팅 자동 폐기 (페이지 로드 시마다 실행)
-  await autoExpirePastMeetings();
+  // 1단계: 기본 사용자 정보 및 기만료 미팅 처리를 병렬로 실행
+  const [user, companyMaster] = await Promise.all([
+    db.user.findUnique({ where: { id: buyerId } }),
+    db.user.findFirst({ where: { companyName, isMaster: true } }),
+    autoExpirePastMeetings()
+  ]);
 
-  const user = await db.user.findUnique({
-    where: { id: buyerId }
-  });
+  if (!user) redirect("/login");
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  // ✅ 슬롯 조회 (마스터는 전체, 멤버는 본인 것만)
-  const mySlots = await db.timeSlot.findMany({
-    where: user.isMaster 
-      ? { buyer: { companyName: user.companyName } }
-      : { buyerId: buyerId },
-    include: { 
-      buyer: true, // 생성자 정보 표시용
-      meetings: { 
-        include: { 
-          seller: { include: { onePager: true } }, 
-          timeSlot: true,
-          pic: true
-        } 
-      } 
-    },
-    orderBy: { startTime: 'asc' }
-  });
-
-  // ✅ 회사의 마스터 유저 ID 찾기 (모든 회람의 기준)
-  const companyMaster = await db.user.findFirst({
-    where: { companyName: user.companyName, isMaster: true }
-  });
   const masterId = companyMaster?.id || buyerId;
 
-  // ✅ 확정된 미동 조회 (마스터: 회사 전체 / 멤버: 본인 담당 또는 본인 슬롯 건)
-  const confirmedMeetings = await db.meeting.findMany({
-    where: { 
-      status: { in: ["ACCEPTED", "CONFIRMED"] },
-      ...(user.isMaster ? {
-        buyer: { companyName: user.companyName }
-      } : {
-        OR: [
-          { picId: buyerId },
-          { timeSlot: { buyerId: buyerId } }
-        ]
-      })
-    },
-    include: { 
-      seller: { include: { onePager: true } }, 
-      timeSlot: true,
-      pic: true 
-    },
-    orderBy: { timeSlot: { startTime: 'asc' } }
-  });
-
-  const directRequestsRaw = await db.meeting.findMany({
-    where: {
-      buyerId: masterId,
-      meetingType: "DIRECT_REQUEST",
-      status: "PENDING",
-      // 마스터는 전체 관람, 일반 멤버는 본인에게 배정된 것만 관람
-      ...(user.isMaster ? {} : { picId: buyerId })
-    },
-    include: {
-      pic: true,
-      seller: { 
-        include: { 
-          onePager: true 
+  // 2단계: 나머지 모든 데이터 조회를 병렬로 실행
+  const [
+    mySlots,
+    confirmedMeetings,
+    directRequestsRaw,
+    allSellers,
+    rejectedMeetings,
+    pendingMembers,
+    approvedMembers,
+    rejectedTeamMembers
+  ] = await Promise.all([
+    db.timeSlot.findMany({
+      where: user.isMaster 
+        ? { buyer: { companyName: user.companyName } }
+        : { buyerId: buyerId },
+      include: { 
+        buyer: true,
+        meetings: { 
+          include: { 
+            seller: { include: { onePager: true } }, 
+            timeSlot: true,
+            pic: true
+          } 
         } 
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+      },
+      orderBy: { startTime: 'asc' }
+    }),
+    db.meeting.findMany({
+      where: { 
+        status: { in: ["ACCEPTED", "CONFIRMED"] },
+        ...(user.isMaster ? {
+          buyer: { companyName: user.companyName }
+        } : {
+          OR: [
+            { picId: buyerId },
+            { timeSlot: { buyerId: buyerId } }
+          ]
+        })
+      },
+      include: { 
+        seller: { include: { onePager: true } }, 
+        timeSlot: true,
+        pic: true 
+      },
+      orderBy: { timeSlot: { startTime: 'asc' } }
+    }),
+    db.meeting.findMany({
+      where: {
+        buyerId: masterId,
+        meetingType: "DIRECT_REQUEST",
+        status: "PENDING",
+        ...(user.isMaster ? {} : { picId: buyerId })
+      },
+      include: {
+        pic: true,
+        seller: { include: { onePager: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    db.user.findMany({
+      where: { role: "SELLER", approvalStatus: "APPROVED" },
+      include: { onePager: true },
+      orderBy: { companyName: 'asc' }
+    }),
+    db.meeting.findMany({
+      where: { 
+        status: { in: ["REJECTED", "CANCELLED"] },
+        ...(user.isMaster ? {
+          buyer: { companyName: user.companyName }
+        } : {
+          OR: [
+            { picId: buyerId },
+            { timeSlot: { buyerId: buyerId } }
+          ]
+        })
+      },
+      include: { 
+        seller: { include: { onePager: true } }, 
+        timeSlot: true,
+        pic: true 
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    user.isMaster ? db.user.findMany({
+      where: { companyName: user.companyName, approvalStatus: "PENDING", id: { not: buyerId } }
+    }) : Promise.resolve([]),
+    user.isMaster ? db.user.findMany({
+      where: { companyName: user.companyName, approvalStatus: "APPROVED" }
+    }) : Promise.resolve([]),
+    user.isMaster ? db.user.findMany({
+      where: { companyName: user.companyName, approvalStatus: "REJECTED" }
+    }) : Promise.resolve([])
+  ]);
 
-  // ✅ 각 제안의 셀러 회사에 속한 모든 멤버(승인된 유저) 가져오기
+  // ✅ 각 제안의 셀러 회사에 속한 모든 멤버 가져오기 (이건 결과에 기반하므로 뒤에 유지)
   const directRequests = await Promise.all(directRequestsRaw.map(async (req) => {
     const companyMembers = await db.user.findMany({
       where: { 
@@ -100,69 +131,9 @@ export default async function BuyerPage() {
     });
     return {
       ...req,
-      seller: {
-        ...req.seller,
-        members: companyMembers
-      }
+      seller: { ...req.seller, members: companyMembers }
     };
   }));
-
-  const allSellers = await db.user.findMany({
-    where: { 
-      role: "SELLER", 
-      approvalStatus: "APPROVED" 
-    },
-    include: { onePager: true },
-    orderBy: { companyName: 'asc' }
-  });
-
-  // ✅ 거절된 미팅 내역 조회 (마스터: 회사 전체 / 멤버: 본인 담당 거절 건)
-  const rejectedMeetings = await db.meeting.findMany({
-    where: { 
-      status: { in: ["REJECTED", "CANCELLED"] },
-      ...(user.isMaster ? {
-        buyer: { companyName: user.companyName }
-      } : {
-        OR: [
-          { picId: buyerId },
-          { timeSlot: { buyerId: buyerId } }
-        ]
-      })
-    },
-    include: { 
-      seller: { include: { onePager: true } }, 
-      timeSlot: true,
-      pic: true 
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  // ✅ 셀러 페이지와 동일하게 팀 관련 쿼리 추가
-  let pendingMembers: any[] = [];
-  let approvedMembers: any[] = [];
-  let rejectedTeamMembers: any[] = [];
-
-  if (user.isMaster) {
-    pendingMembers = await db.user.findMany({
-      where: { 
-        companyName: user.companyName, 
-        approvalStatus: "PENDING", 
-        id: { not: buyerId } 
-      }
-    });
-    approvedMembers = await db.user.findMany({
-      where: { 
-        companyName: user.companyName, 
-        approvalStatus: "APPROVED" 
-      }
-    });
-    rejectedTeamMembers = await db.user.findMany({
-      where: { 
-        companyName: user.companyName, 
-        approvalStatus: "REJECTED" 
-      }
-    });
-  }
 
   return (
     <BuyerClient 
@@ -173,7 +144,6 @@ export default async function BuyerPage() {
       rejectedMeetings={rejectedMeetings}
       allSellers={allSellers}
       buyerId={buyerId}
-      // ✅ BuyerClient에 팀 관련 props 전달
       pendingMembers={pendingMembers}
       approvedMembers={approvedMembers}
       rejectedTeamMembers={rejectedTeamMembers}

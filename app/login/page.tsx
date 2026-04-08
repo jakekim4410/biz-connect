@@ -29,16 +29,8 @@ export default function LoginPage() {
         else setError(t.login.errorGeneral);
         setIsLoading(false);
       } else {
-        const sessionRes = await fetch("/api/auth/session");
-        const sessionData = await sessionRes.json();
-        const role = sessionData?.user?.role;
-
-        if (role === "ADMIN") router.push("/select-role");
-        else if (role === "BUYER") router.push("/buyer");
-        else if (role === "SELLER") router.push("/seller");
-        else router.push("/");
-
-        router.refresh();
+        // ✅ 최적화: 클라이언트에서 세션을 다시 fetch하지 않고 '/'로 이동하여 서버 사이드 리다이렉션 유도
+        window.location.href = "/";
       }
     } catch (err) {
       setError(t.login.errorGeneral);
