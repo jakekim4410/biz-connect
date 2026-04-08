@@ -286,6 +286,18 @@ export default function BuyerClient({
     });
   }, [allSellers, confirmedMeetings, mySlots, directRequests, rejectedMeetings]);
 
+  // [ADD] 탭 확장 시 알림 동기화 로직
+  useEffect(() => {
+    if (!mounted || !user?.id) return;
+    if (expandedSection === 'rejected') {
+      const currentCount = rejectedMeetings?.length || 0;
+      if (seenCounts.rejected !== currentCount) {
+        setSeenCounts(prev => ({ ...prev, rejected: currentCount }));
+        localStorage.setItem(`seen_rejected_${user.id}`, currentCount.toString());
+      }
+    }
+  }, [expandedSection, rejectedMeetings?.length, mounted, user?.id]);
+
   // editingSlot이 열릴 때 미팅 타입 / 장소값 / TBA / note 초기화
   useEffect(() => {
     if (!editingSlot) return;
@@ -324,12 +336,6 @@ export default function BuyerClient({
     setExpandedSection(id);
     if ((alerts as any)[id]) {
       setAlerts(prev => ({ ...prev, [id]: false }));
-    }
-    // [ADD] 거절 내역 확인 시 seenCounts 업데이트 및 localStorage 저장
-    if (id === 'rejected' && user?.id) {
-      const currentCount = rejectedMeetings?.length || 0;
-      setSeenCounts(prev => ({ ...prev, rejected: currentCount }));
-      localStorage.setItem(`seen_rejected_${user.id}`, currentCount.toString());
     }
   };
 
