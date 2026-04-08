@@ -9,71 +9,83 @@ import { sendApprovalCompletedEmail, sendDirectRequestEmail, sendJoinRejectedEma
 
 // 1. 미팅 신청 (일반 예약 & 다이렉트 제안 포함)
 export async function applyMeetingAction(formData: FormData, sellerId: number) {
-  const session = await getServerSession(authOptions);
-  let slotId = Number(formData.get("slotId"));
-  let buyerId = Number(formData.get("buyerId"));
-  const buyerCompanyName = formData.get("buyerCompanyName") as string;
-  const proposal = formData.get("proposal") as string;
-  const picIdStr = formData.get("picId") as string;
-  const picId = picIdStr ? Number(picIdStr) : null;
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return { error: "로그인이 필요합니다." };
 
-  if (slotId === -1 || buyerId === -1) {
-    if (!buyerCompanyName) {
-      throw new Error("회사명 또는 신청 정보가 부족합니다.");
-    }
-    let buyer = await db.user.findFirst({
-      where: { role: "BUYER", companyName: buyerCompanyName, isMaster: true }
-    }) || await db.user.findFirst({
-      where: { role: "BUYER", companyName: buyerCompanyName }
-    });
+    let slotId = Number(formData.get("slotId"));
+    let buyerId = Number(formData.get("buyerId"));
+    const buyerCompanyName = formData.get("buyerCompanyName") as string;
+    const proposal = formData.get("proposal") as string;
+    const picIdStr = formData.get("picId") as string;
+    const picId = picIdStr ? Number(picIdStr) : null;
 
-    if (!buyer) {
-      // 정규화 매칭 시도
-      const allBuyers = await db.user.findMany({
-        where: { role: "BUYER" }
-      });
-      const { normalizeCompanyName } = await import("@/lib/matchUtils");
-      const normalizedInput = normalizeCompanyName(buyerCompanyName);
-      
-      buyer = allBuyers.find(u => normalizeCompanyName(u.companyName) === normalizedInput) || null;
-    }
-
-    if (!buyer) {
-      throw new Error("해당 바이어를 찾을 수 없습니다.");
-    }
-    buyerId = buyer.id;
-
-    // 다이렉트 미팅 제안 (TimeSlot 없음)
-    await db.meeting.create({
-      data: {
-        buyerId,
-        sellerId,
-        proposal,
-        status: "PENDING",
-        meetingType: "DIRECT_REQUEST",
-        picId,
-        // timeSlotId는 연결하지 않음
+    // 1. 바이어 정보 보정 (AI 검색 등에서 buyerId가 -1인 경우)
+    if (buyerId === -1) {
+      if (!buyerCompanyName) {
+        return { error: "회사명 정보가 부족합니다." };
       }
-    });
+      let buyer = await db.user.findFirst({
+        where: { role: "BUYER", companyName: buyerCompanyName, isMaster: true }
+      }) || await db.user.findFirst({
+        where: { role: "BUYER", companyName: buyerCompanyName }
+      });
 
-    // --- [추가] 다이렉트 미팅 제안 알림 메일 전송 ---
-    if (buyer) {
-      sendDirectRequestEmail(
-        buyer.email,
-        buyer.companyName || buyer.name,
-        (session?.user as any).name || "셀러 파트너",
-        proposal,
-        buyer.preferredLanguage || "ko"
-      );
+      if (!buyer) {
+        // 정규화 매칭 시도
+        const allBuyers = await db.user.findMany({ where: { role: "BUYER" } });
+        const { normalizeCompanyName } = await import("@/lib/matchUtils");
+        const normalizedInput = normalizeCompanyName(buyerCompanyName);
+        buyer = allBuyers.find(u => normalizeCompanyName(u.companyName) === normalizedInput) || null;
+      }
+
+      if (!buyer) {
+        return { error: "해당 바이어를 찾을 수 없습니다." };
+      }
+      buyerId = buyer.id;
     }
-    // 일반 미팅 신청 (기존 열린 슬롯 매칭)
+
+    // 2. 다이렉트 미팅 제안 (slotId === -1)
+    if (slotId === -1) {
+      await db.meeting.create({
+        data: {
+          buyerId,
+          sellerId,
+          proposal,
+          status: "PENDING",
+          meetingType: "DIRECT_REQUEST",
+          picId,
+        }
+      });
+
+      // 알림 메일 전송
+      const buyer = await db.user.findUnique({ where: { id: buyerId } });
+      if (buyer) {
+        sendDirectRequestEmail(
+          buyer.email,
+          buyer.companyName || buyer.name,
+          (session?.user as any).name || "셀러 파트너",
+          proposal,
+          buyer.preferredLanguage || "ko"
+        );
+      }
+
+      revalidatePath("/seller");
+      return { success: true };
+    }
+
+    // 3. 일반 미팅 신청 (slotId > 0)
     const slot = await db.timeSlot.findUnique({
       where: { id: slotId },
       select: { startTime: true }
     });
 
-    if (slot && slot.startTime < new Date()) {
-      throw new Error("이미 활동 시간이 지난 슬롯입니다.");
+    if (!slot) {
+      return { error: "존재하지 않는 슬롯입니다." };
+    }
+
+    if (slot.startTime < new Date()) {
+      return { error: "이미 활동 시간이 지난 슬롯입니다." };
     }
 
     await db.meeting.create({
@@ -87,9 +99,14 @@ export async function applyMeetingAction(formData: FormData, sellerId: number) {
         picId
       }
     });
-  }
 
-  revalidatePath("/seller");
+    revalidatePath("/seller");
+    return { success: true };
+
+  } catch (error) {
+    console.error("미팅 신청 오류:", error);
+    return { error: "미팅 신청 처리 중 오류가 발생했습니다." };
+  }
 }
 
 // 2. 멤버 승인/거절 처리 (마스터 전용)

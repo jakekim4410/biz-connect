@@ -1123,11 +1123,16 @@ export default function SellerClient({
       if (selectedPicId) {
         formData.set("picId", selectedPicId);
       }
-      await applyMeetingAction(formData, sellerId);
-      alert(isEn ? "✓ Application Complete!" : "✓ 신청 완료!");
-      setApplyingSlot(null);
-      setSelectedPicId(null);
-      setExpandedSection('pending');
+      const result = await applyMeetingAction(formData, sellerId);
+      
+      if (result?.error) {
+        alert(result.error);
+      } else {
+        alert(isEn ? "✓ Application Complete!" : "✓ 신청 완료!");
+        setApplyingSlot(null);
+        setSelectedPicId(null);
+        setExpandedSection('pending');
+      }
     } catch (err) {
       alert(isEn ? "Error occurred during application." : "신청 중 오류가 발생했습니다.");
     } finally {
