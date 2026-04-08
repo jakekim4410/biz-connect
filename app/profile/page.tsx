@@ -92,14 +92,20 @@ export default function ProfilePage() {
           <div className="space-y-3 pt-4 border-t border-slate-100">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">회원 유형</label>
             <div className="flex gap-2 flex-wrap">
-              {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
+              {[
+                { val: "VC", label: "VC" },
+                { val: "AC", label: "AC" },
+                { val: "바이어", label: "Buyer" },
+                { val: "스타트업", label: "Startup" },
+                { val: "기타", label: "Other" }
+              ].map((opt) => (
                 <label 
-                  key={v} 
-                  className={`flex-1 min-w-[80px] text-center p-3 border rounded-xl cursor-pointer text-xs font-bold transition-all
-                    ${selectedType === v ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"}`}
+                  key={opt.val} 
+                  className={`flex-1 min-w-[80px] text-center px-1 py-3 border rounded-xl cursor-pointer text-xs font-bold transition-all whitespace-nowrap break-keep shrink-0
+                    ${selectedType === opt.val ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"}`}
                 >
-                  <input type="radio" name="userType" value={v} className="hidden" checked={selectedType === v} onChange={(e) => setSelectedType(e.target.value)} />
-                  {v}
+                  <input type="radio" name="userType" value={opt.val} className="hidden" checked={selectedType === opt.val} onChange={(e) => setSelectedType(e.target.value)} />
+                  {opt.label}
                 </label>
               ))}
             </div>

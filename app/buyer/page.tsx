@@ -25,13 +25,18 @@ export default async function BuyerPage() {
     redirect("/login");
   }
 
+  // ✅ 슬롯 조회 (마스터는 전체, 멤버는 본인 것만)
   const mySlots = await db.timeSlot.findMany({
-    where: { buyerId },
+    where: user.isMaster 
+      ? { buyer: { companyName: user.companyName } }
+      : { buyerId: buyerId },
     include: { 
+      buyer: true, // 생성자 정보 표시용
       meetings: { 
         include: { 
           seller: { include: { onePager: true } }, 
-          timeSlot: true 
+          timeSlot: true,
+          pic: true
         } 
       } 
     },
@@ -44,18 +49,23 @@ export default async function BuyerPage() {
   });
   const masterId = companyMaster?.id || buyerId;
 
-  // ✅ 확정된 미동 조회 (마스터 전체 회람 + 내 담당 미팅)
+  // ✅ 확정된 미동 조회 (마스터: 회사 전체 / 멤버: 본인 담당 또는 본인 슬롯 건)
   const confirmedMeetings = await db.meeting.findMany({
     where: { 
       status: { in: ["ACCEPTED", "CONFIRMED"] },
-      OR: [
-        { buyerId: masterId }, // 회사 마스터 ID가 바이어인 경우 (기본)
-        { picId: buyerId }      // 현재 유저가 담당자(PIC)로 지정된 경우
-      ]
+      ...(user.isMaster ? {
+        buyer: { companyName: user.companyName }
+      } : {
+        OR: [
+          { picId: buyerId },
+          { timeSlot: { buyerId: buyerId } }
+        ]
+      })
     },
     include: { 
       seller: { include: { onePager: true } }, 
-      timeSlot: true 
+      timeSlot: true,
+      pic: true 
     },
     orderBy: { timeSlot: { startTime: 'asc' } }
   });
@@ -106,6 +116,27 @@ export default async function BuyerPage() {
     orderBy: { companyName: 'asc' }
   });
 
+  // ✅ 거절된 미팅 내역 조회 (마스터: 회사 전체 / 멤버: 본인 담당 거절 건)
+  const rejectedMeetings = await db.meeting.findMany({
+    where: { 
+      status: { in: ["REJECTED", "CANCELLED"] },
+      ...(user.isMaster ? {
+        buyer: { companyName: user.companyName }
+      } : {
+        OR: [
+          { picId: buyerId },
+          { timeSlot: { buyerId: buyerId } }
+        ]
+      })
+    },
+    include: { 
+      seller: { include: { onePager: true } }, 
+      timeSlot: true,
+      pic: true 
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
   // ✅ 셀러 페이지와 동일하게 팀 관련 쿼리 추가
   let pendingMembers: any[] = [];
   let approvedMembers: any[] = [];
@@ -139,6 +170,7 @@ export default async function BuyerPage() {
       mySlots={mySlots} 
       confirmedMeetings={confirmedMeetings} 
       directRequests={directRequests}
+      rejectedMeetings={rejectedMeetings}
       allSellers={allSellers}
       buyerId={buyerId}
       // ✅ BuyerClient에 팀 관련 props 전달

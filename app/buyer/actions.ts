@@ -89,10 +89,17 @@ export async function updateSlotAction(slotId: number, formData: FormData) {
 // 3. 예약 취소 
 // [UPDATE] locale 파라미터 추가
 export async function deleteSlotAction(slotId: number, locale: Locale = "ko") {
+  const session = await getServerSession(authOptions);
+  const currentUserId = session?.user ? Number((session.user as any).id) : null;
   const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
+  
   await db.meeting.updateMany({ 
     where: { timeSlotId: slotId },
-    data: { status: "REJECTED", rejectionReason: tReasons.cancelledByBuyer }
+    data: { 
+      status: "REJECTED", 
+      rejectionReason: tReasons.cancelledByBuyer,
+      picId: currentUserId
+    }
   });
   await db.timeSlot.update({ 
     where: { id: slotId },
@@ -103,16 +110,21 @@ export async function deleteSlotAction(slotId: number, locale: Locale = "ko") {
   return { success: true };
 }
 
-// 4. 수락 처리 시 최초 장소를 Meeting으로 복사 (이메일 발송 포함)
-// [UPDATE] locale 파라미터 추가
 export async function handleStatusAction(meetingId: number, slotId: number, action: string, rejectionReason?: string, locale: Locale = "ko") {
+  const session = await getServerSession(authOptions);
+  const currentUserId = session?.user ? Number((session.user as any).id) : null;
   const tReasons = REJECTION_REASONS[locale] || REJECTION_REASONS["ko"];
+
   if (action === "ACCEPT") {
     const slot = await db.timeSlot.findUnique({ where: { id: slotId } });
     
     const confirmedMeeting = await db.meeting.update({ 
       where: { id: meetingId }, 
-      data: { status: "CONFIRMED", location: slot?.location },
+      data: { 
+        status: "CONFIRMED", 
+        location: slot?.location,
+        picId: currentUserId // 담당자 지정
+      },
       include: {
         buyer: true,
         seller: true,
@@ -122,7 +134,11 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
 
     await db.meeting.updateMany({ 
       where: { timeSlotId: slotId, id: { not: meetingId } }, 
-      data: { status: "REJECTED", rejectionReason: tReasons.matchedOther } 
+      data: { 
+        status: "REJECTED", 
+        rejectionReason: tReasons.matchedOther,
+        picId: currentUserId // 다른 건들을 거절한 주체도 본인으로 기록
+      } 
     });
     await db.timeSlot.update({ where: { id: slotId }, data: { status: "CLOSED" } });
 
@@ -145,7 +161,14 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
     }
 
   } else {
-    await db.meeting.update({ where: { id: meetingId }, data: { status: "REJECTED", rejectionReason: rejectionReason || tReasons.defaultReason } });
+    await db.meeting.update({ 
+      where: { id: meetingId }, 
+      data: { 
+        status: "REJECTED", 
+        rejectionReason: rejectionReason || tReasons.defaultReason,
+        picId: currentUserId
+      } 
+    });
   }
   revalidatePath("/buyer");
   revalidatePath("/seller");
@@ -330,11 +353,13 @@ export async function rejectDirectMeetingAction(meetingId: number, reason?: stri
   if (!session) return { error: "로그인이 필요합니다." };
 
   try {
+    const currentUserId = Number((session.user as any).id);
     await db.meeting.update({
       where: { id: meetingId },
       data: { 
         status: "REJECTED", 
-        rejectionReason: reason || tReasons.defaultReason 
+        rejectionReason: reason || tReasons.defaultReason,
+        picId: currentUserId
       }
     });
 

@@ -13,9 +13,10 @@ export default function MeetingChat({ meetingId, currentUser, isEn, meeting }: a
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const updateLastRead = () => {
+  const updateLastRead = (latestMsgTime?: number) => {
     if (!meetingId || !currentUser?.id) return;
-    localStorage.setItem(`lastRead_${currentUser.id}_${meetingId}`, Date.now().toString());
+    const timeToSave = latestMsgTime ? Math.max(Date.now(), latestMsgTime + 1000) : Date.now() + 5000;
+    localStorage.setItem(`lastRead_${currentUser.id}_${meetingId}`, timeToSave.toString());
     window.dispatchEvent(new Event('messagesRead'));
   };
 
@@ -31,9 +32,11 @@ export default function MeetingChat({ meetingId, currentUser, isEn, meeting }: a
             setHasNewMessage(true);
           }
         }
-        
         setMessages(data);
-        if (data.length > 0) updateLastRead();
+        if (data.length > 0) {
+          const latestMsgTime = new Date(data[data.length - 1].createdAt).getTime();
+          updateLastRead(latestMsgTime);
+        }
       }
     } catch(e) {
       console.error(e);

@@ -2,7 +2,7 @@
 import AiSearchResultCard from "@/components/AiSearchResultCard";
 import { useI18n, industryOptions, regionOptions } from "@/lib/i18n";
 import { isCompanyMatch } from "@/lib/matchUtils";
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   applyMeetingAction,
@@ -20,7 +20,8 @@ import {
   Users, ShieldCheck, User as UserIcon, Save, AlertCircle, Building2,
   Trophy, ArrowRight, AlertTriangle, TrendingUp, Target,
   XCircle, Calendar, Info, CheckCircle2, Globe, MessageCircle,
-  ChevronDown, ChevronUp, UserCheck, Crown, Link as LinkIcon, Lock, RefreshCw
+  ChevronDown, ChevronUp, UserCheck, Crown, Link as LinkIcon, Lock, RefreshCw,
+  Table, LayoutGrid, LayoutList
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import MeetingChat from "@/components/MeetingChat";
@@ -234,10 +235,16 @@ function RejectedScreen({ user }: { user: any }) {
                 {locale === "ko" ? "기업 분류 (User Type)" : "User Type"}
               </label>
               <div className="flex gap-2 flex-wrap mt-1">
-                {["VC", "AC", "바이어", "스타트업", "기타"].map((v) => (
-                  <label key={v} className={`flex-1 min-w-[70px] text-center p-3 border rounded-[16px] cursor-pointer text-xs font-black transition-all ${selectedType === v ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100"}`}>
-                    <input type="radio" name="userType" value={v} className="hidden" checked={selectedType === v} onChange={(e) => setSelectedType(e.target.value)} />
-                    {v}
+                {[
+                  { val: "VC", label: "VC" },
+                  { val: "AC", label: "AC" },
+                  { val: "바이어", label: "Buyer" },
+                  { val: "스타트업", label: "Startup" },
+                  { val: "기타", label: "Other" }
+                ].map((opt) => (
+                  <label key={opt.val} className={`flex-1 min-w-[70px] text-center px-1 py-3 border rounded-[16px] cursor-pointer text-xs font-black transition-all whitespace-nowrap break-keep shrink-0 ${selectedType === opt.val ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100"}`}>
+                    <input type="radio" name="userType" value={opt.val} className="hidden" checked={selectedType === opt.val} onChange={(e) => setSelectedType(e.target.value)} />
+                    {opt.label}
                   </label>
                 ))}
               </div>
@@ -354,8 +361,8 @@ function PicSelector({ buyerMembers, selectedPicId, onSelect, isEn, masterUser, 
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((v) => !v)}
         className={`w-full flex items-start justify-between gap-4 px-6 py-7 md:py-8 rounded-[30px] border-2 transition-all text-left shadow-sm hover:shadow-md ${disabled ? "bg-slate-50 border-slate-100 cursor-not-allowed" :
-            selectedMember ? "bg-white border-blue-500 shadow-xl shadow-blue-50 text-slate-900" :
-              "bg-white border-slate-100 text-slate-500 hover:border-blue-300"
+          selectedMember ? "bg-white border-blue-500 shadow-xl shadow-blue-50 text-slate-900" :
+            "bg-white border-slate-100 text-slate-500 hover:border-blue-300"
           }`}
       >
         {selectedMember ? (
@@ -426,8 +433,8 @@ function PicSelector({ buyerMembers, selectedPicId, onSelect, isEn, masterUser, 
                 type="button"
                 onClick={() => { onSelect(m.id); setIsOpen(false); }}
                 className={`w-full flex items-center gap-4 px-5 py-5 rounded-2xl transition-all group relative border-2 ${selectedPicId === m.id
-                    ? "bg-white border-blue-500 shadow-md ring-4 ring-blue-500/5"
-                    : "bg-transparent border-transparent hover:bg-white hover:border-slate-100 hover:shadow-sm"
+                  ? "bg-white border-blue-500 shadow-md ring-4 ring-blue-500/5"
+                  : "bg-transparent border-transparent hover:bg-white hover:border-slate-100 hover:shadow-sm"
                   }`}
               >
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${m.isMaster ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
@@ -646,6 +653,7 @@ export default function SellerClient({
   const [confirmedSort, setConfirmedSort] = useState("asc");
   const [applyingSlot, setApplyingSlot] = useState<any>(null);
   const [applyingSlots, setApplyingSlots] = useState<any[]>([]);
+  const [confirmedFilter, setConfirmedFilter] = useState<'ALL' | 'UPCOMING' | 'PAST'>('UPCOMING');
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
 
   const [isPicLocked, setIsPicLocked] = useState(false);
@@ -718,8 +726,56 @@ export default function SellerClient({
     rejected: 0,
   });
   const [frozenNewRejectedCount, setFrozenNewRejectedCount] = useState(0);
+  const [frozenNewConfirmedCount, setFrozenNewConfirmedCount] = useState(0);
+
+  // ── 뷰 모드 States (Global Tech 스타일 적용) ──
+  const [availableViewMode, setAvailableViewMode] = useState<'table' | 'card'>('card');
+  const [pendingViewMode, setPendingViewMode] = useState<'table' | 'card'>('table');
+  const [confirmedViewMode, setConfirmedViewMode] = useState<'table' | 'card'>('table');
+  const [rejectedViewMode, setRejectedViewMode] = useState<'table' | 'card'>('table');
+
+  // ─── 뷰 토글 컴포넌트 (Stripe/Linear Refined) ───
+  const ViewToggle = ({
+    mode,
+    setMode,
+    tableLabel,
+    cardLabel,
+    iconOnly = false
+  }: {
+    mode: 'table' | 'card',
+    setMode: (m: 'table' | 'card') => void,
+    tableLabel?: string,
+    cardLabel?: string,
+    iconOnly?: boolean
+  }) => (
+    <div className="flex bg-slate-100 p-1 rounded-[12px] shadow-inner shrink-0 scale-90 sm:scale-100 origin-right transition-all">
+      <button
+        type="button"
+        onClick={() => setMode('card')}
+        title={cardLabel || (isEn ? "Card View" : "카드 뷰")}
+        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] transition-all ${mode === 'card' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        <LayoutGrid size={16} /> {!iconOnly && <span className="hidden md:inline text-[11px] font-black">{cardLabel || (isEn ? "Card" : "카드")}</span>}
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('table')}
+        title={tableLabel || (isEn ? "Table View" : "테이블 뷰")}
+        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] transition-all ${mode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        <LayoutList size={16} /> {!iconOnly && <span className="hidden md:inline text-[11px] font-black">{tableLabel || (isEn ? "Table" : "테이블")}</span>}
+      </button>
+    </div>
+  );
+
   const [selectedChatMeeting, setSelectedChatMeeting] = useState<any>(null);
   const [unreadMeetings, setUnreadMeetings] = useState<number[]>([]);
+
+  const totalUpcomingConfirmedCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return confirmedMeetings.filter((m: any) => new Date(m.timeSlot.startTime) >= today).length;
+  }, [confirmedMeetings]);
 
   // ─── 핵심 알림 로직: API 응답 + localStorage lastRead 비교 ───────────────
   // MeetingChat이 열리면 localStorage.setItem(`lastRead_${userId}_${id}`, Date.now())을 저장함
@@ -870,7 +926,17 @@ export default function SellerClient({
       });
     };
     if (expandedSection === 'available') syncSeenCount('available', availableSlots.length);
-    if (expandedSection === 'confirmed') syncSeenCount('confirmed', confirmedMeetings.length);
+    if (expandedSection === 'confirmed') {
+      setFrozenNewConfirmedCount((prev) => {
+        if (prev === 0 && confirmedMeetings.length > seenCounts.confirmed) {
+          return confirmedMeetings.length - seenCounts.confirmed;
+        }
+        return prev;
+      });
+      syncSeenCount('confirmed', confirmedMeetings.length);
+    } else {
+      setFrozenNewConfirmedCount(0);
+    }
     if (expandedSection === 'rejected') {
       setFrozenNewRejectedCount((prev) => {
         if (prev === 0 && rejectedMeetings.length > seenCounts.rejected) {
@@ -913,13 +979,24 @@ export default function SellerClient({
   const displayConfirmed = useMemo(() => {
     if (!confirmedMeetings) return [];
     let list = [...confirmedMeetings];
+
+    // 필터 적용
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (confirmedFilter === 'UPCOMING') {
+      list = list.filter((m: any) => new Date(m.timeSlot.startTime) >= today);
+    } else if (confirmedFilter === 'PAST') {
+      list = list.filter((m: any) => new Date(m.timeSlot.startTime) < today);
+    }
+
     list.sort((a: any, b: any) => {
       const timeA = new Date(a.timeSlot.startTime).getTime();
       const timeB = new Date(b.timeSlot.startTime).getTime();
       return confirmedSort === "asc" ? timeA - timeB : timeB - timeA;
     });
     return list;
-  }, [confirmedSort, confirmedMeetings]);
+  }, [confirmedSort, confirmedMeetings, confirmedFilter]);
 
   const formatDateWithDay = (dateString: string) => {
     if (!dateString) return "-";
@@ -1074,8 +1151,13 @@ export default function SellerClient({
     available: availableSlots.filter((s: any) => s.meetings?.some((m: any) => unreadMeetings.includes(m.id))).length
       + Math.max(0, availableSlots.length - seenCounts.available),
     pending: pendingMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length,
-    confirmed: confirmedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length
-      + Math.max(0, confirmedMeetings.length - seenCounts.confirmed),
+    confirmed: (() => {
+      // 1. 읽지 않은 메시지가 있는 확정 미팅 수
+      const unreadMsgCount = confirmedMeetings.filter((m: any) => unreadMeetings.includes(m.id)).length;
+      // 2. 탭 진입 전 새로 추가된 확정 미팅 수
+      const newCount = Math.max(0, confirmedMeetings.length - seenCounts.confirmed);
+      return unreadMsgCount + newCount;
+    })(),
     rejected: Math.max(0, rejectedMeetings.length - seenCounts.rejected),
   };
 
@@ -1092,12 +1174,12 @@ export default function SellerClient({
     },
     {
       id: 'confirmed', icon: <Handshake size={22} />, label: t.seller.nav.confirmed, sub: 'LIST',
-      count: confirmedMeetings.length,
+      count: totalUpcomingConfirmedCount,
       alertCount: unreadCounts.confirmed > 0 ? (unreadCounts.confirmed > 99 ? '99+' : String(unreadCounts.confirmed)) : null,
     },
     {
       id: 'rejected', icon: <Ban size={22} />, label: t.seller.nav.rejected, sub: 'REJECTED',
-      count: rejectedMeetings.length,
+      count: unreadCounts.rejected > 0 ? unreadCounts.rejected : null,
       alertCount: unreadCounts.rejected > 0 ? (unreadCounts.rejected > 99 ? '99+' : String(unreadCounts.rejected)) : null,
     },
   ];
@@ -1203,45 +1285,75 @@ export default function SellerClient({
           </div>
         )}
 
-        {/* ─ 네비게이션 헤더 ─ */}
-        <header className="bg-white/90 backdrop-blur-2xl p-3 md:p-6 rounded-[24px] md:rounded-[40px] shadow-lg md:shadow-xl border border-white w-full">
-          <div className="flex flex-row md:flex-wrap md:justify-center gap-2 md:gap-12 py-2 overflow-x-auto snap-x hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* ─ 네비게이션 헤더 (Image 2 - Original Compact Style) ─ */}
+        <header className="bg-white/90 backdrop-blur-md p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl shadow-slate-200 border border-white/50 sticky top-4 z-40 mx-1 md:mx-0 mb-10 md:mb-16">
+          <div className="flex flex-row items-start justify-around gap-2 md:gap-4 overflow-x-auto snap-x hide-scrollbar">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setExpandedSection(item.id)}
-                className={`relative flex flex-col items-center gap-1.5 p-2 md:p-3 transition-all duration-300 snap-center min-w-[70px] md:min-w-0 ${expandedSection === item.id ? 'scale-105 md:scale-110' : ''}`}
+                className={`relative flex flex-col items-center gap-2 md:gap-3 p-2 md:p-4 transition-all duration-300 snap-center min-w-[85px] md:min-w-[110px] group`}
               >
-                <div className={`relative w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md transition-colors ${expandedSection === item.id ? 'bg-slate-900 text-white shadow-slate-300' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                  {/* ── 숫자 카운트 알림 배지 ── */}
+                {/* ── 아이콘 박스 ── */}
+                <div className={`relative w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-3xl flex items-center justify-center transition-all duration-500 ${expandedSection === item.id
+                  ? 'bg-slate-900 text-white scale-110'
+                  : 'bg-white text-slate-400 border border-slate-100 group-hover:bg-slate-50'
+                  }`}>
+                  {item.id === 'rejected' && (item.alertCount || item.count > 0) ? (
+                    <div className="relative">
+                      <Ban size={24} className={expandedSection === item.id ? 'text-rose-300' : 'text-rose-400'} />
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border border-white"></span>
+                      </span>
+                    </div>
+                  ) : (
+                    React.cloneElement(item.icon as React.ReactElement<any>, { size: 24 })
+                  )}
+
+                  {/* ── 숫자 알림 뱃지 ── */}
                   {item.alertCount && (
-                    <span className={`absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-rose-500 text-white border-2 border-white animate-bounce z-10 shadow-md font-black leading-none ${
-                      item.alertCount.length > 1 ? 'h-5 min-w-[20px] px-1 text-[8px]' : 'h-5 w-5 text-[10px]'
-                    }`}>
+                    <span className={`absolute -top-2 -right-2 flex items-center justify-center rounded-full bg-rose-500 text-white border-2 border-white font-black leading-none ${item.alertCount.length > 1 ? 'h-5 min-w-[20px] px-1 text-[9px]' : 'h-5 w-5 text-[11px]'
+                      }`}>
                       {item.alertCount}
                     </span>
                   )}
-                  {item.icon}
                 </div>
-                <div className="text-center mt-1">
-                  <span className={`text-[10px] md:text-sm font-black block leading-none ${expandedSection === item.id ? 'text-slate-900' : 'text-slate-400'}`}>{item.label} {item.count !== null && `(${item.count})`}</span>
-                  <span className="text-[8px] md:text-[9px] font-bold opacity-40 uppercase mt-1 block">{item.sub}</span>
+
+                {/* ── 텍스트 영역 ── */}
+                <div className="text-center space-y-0.5">
+                  <span className={`text-[11px] md:text-[14px] font-black block leading-none tracking-tight ${expandedSection === item.id ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                    {item.label}
+                    {item.count !== null && (
+                      <span className={`ml-1 text-[9px] md:text-sm font-bold opacity-60`}>({item.count})</span>
+                    )}
+                  </span>
                 </div>
               </button>
             ))}
 
-            <div className="w-[1px] bg-slate-100 hidden md:block mx-1" />
-
-            <Link href="/seller/one-pager" className="flex flex-col items-center gap-1.5 p-2 md:p-3 group transition-all duration-300 snap-center min-w-[70px] md:min-w-0 hover:scale-105">
-              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-[16px] md:rounded-2xl flex items-center justify-center shadow-md ${!isOnePagerCompleted ? 'bg-rose-50 text-rose-500 animate-pulse border border-rose-200' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'} transition-colors`}>
-                <FileText size={22} />
+            {/* ─ 원페이퍼 관리 (Image 2 style) ─ */}
+            <Link
+              href="/seller/one-pager"
+              className="relative flex flex-col items-center gap-2 md:gap-3 p-2 md:p-4 transition-all duration-300 snap-center min-w-[85px] md:min-w-[110px] group"
+            >
+              <div className={`relative w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-3xl flex items-center justify-center transition-all duration-500 ${!isOnePagerCompleted
+                ? 'bg-rose-50 text-rose-500 border border-rose-100 animate-pulse-red'
+                : 'bg-indigo-50 text-indigo-600 border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white'
+                }`}>
+                <FileText size={24} />
+                {!isOnePagerCompleted && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-white"></span>
+                  </span>
+                )}
               </div>
-              <div className="text-center mt-1">
-                <span className={`text-[10px] md:text-sm font-black block leading-tight ${!isOnePagerCompleted ? 'text-rose-500' : 'text-slate-500 group-hover:text-indigo-600'}`}>
-                  {t.seller.nav.onePager}<br />
-                  {!isOnePagerCompleted ? t.seller.nav.onePagerNeeded : t.seller.nav.onePagerManage}
+              <div className="text-center space-y-0.5">
+                <span className={`text-[11px] md:text-[14px] font-black block leading-none tracking-tight ${!isOnePagerCompleted ? 'text-rose-600' : 'text-slate-400 group-hover:text-indigo-600'}`}>
+                  {t.seller.nav.onePager}
                 </span>
-                <span className="text-[8px] md:text-[9px] font-bold opacity-40 uppercase mt-1 block">(ONE-PAGER)</span>
+                <span className="text-[8px] md:text-[10px] font-black opacity-40 uppercase tracking-widest block">One-Pager</span>
               </div>
             </Link>
           </div>
@@ -1636,10 +1748,10 @@ export default function SellerClient({
 
                           <button
                             disabled={processingMemberId !== null}
-                            onClick={async () => { 
-                              setProcessingMemberId(m.id); 
-                              await handleMemberStatus(m.id, "APPROVED"); 
-                              setProcessingMemberId(null); 
+                            onClick={async () => {
+                              setProcessingMemberId(m.id);
+                              await handleMemberStatus(m.id, "APPROVED");
+                              setProcessingMemberId(null);
                             }}
                             className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                           >
@@ -1752,39 +1864,27 @@ export default function SellerClient({
                 </div>
               )}
 
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">
+              <div className="flex flex-row items-center justify-between gap-4 border-b border-slate-100/50 pb-6 md:border-none md:pb-0">
+                <div className="flex flex-col">
+                  <h2 className="text-xl md:text-3xl font-black text-slate-800 leading-tight">
                     {t.seller.available.title}
-                    <span className="text-sm text-slate-400 font-bold uppercase ml-2 tracking-widest">(AVAILABLE)</span>
                   </h2>
-                  {!aiSearchMode && (
-                    <p className="text-xs text-slate-400 font-bold mt-1">
-                      {isEn
-                        ? `${groupedSlots.length} companies · ${availableSlots.length} total slots`
-                        : `${groupedSlots.length}개 기업 · 총 ${availableSlots.length}개 슬롯`
-                      }
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[8px] md:text-[10px] font-black uppercase tracking-widest border border-indigo-100">Search</span>
+                    <span className="text-xs md:text-sm text-slate-400 font-bold tracking-tight">/ {availableSlots.length} {isEn ? "Slots" : "개 슬롯"}</span>
+                  </div>
                 </div>
 
                 {!aiSearchMode && (
-                  <div className="flex items-center gap-2 bg-white rounded-[14px] p-1 border border-slate-100 shadow-sm self-start md:self-auto">
-                    <button
-                      onClick={() => setGroupedView(true)}
-                      className={`px-4 py-2 rounded-[10px] text-xs font-black transition-all flex items-center gap-1.5 ${groupedView ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      <Building2 size={13} />
-                      {isEn ? "By Company" : "회사별"}
-                    </button>
-                    <button
-                      onClick={() => setGroupedView(false)}
-                      className={`px-4 py-2 rounded-[10px] text-xs font-black transition-all flex items-center gap-1.5 ${!groupedView ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      <FileText size={13} />
-                      {isEn ? "Table" : "목록"}
-                    </button>
-                  </div>
+                  <ViewToggle
+                    mode={availableViewMode}
+                    setMode={(m) => {
+                      setAvailableViewMode(m);
+                      setGroupedView(m === 'card');
+                    }}
+                    tableLabel={isEn ? "All Meetings" : "전체미팅"}
+                    cardLabel={isEn ? "By Company" : "회사 별"}
+                  />
                 )}
               </div>
 
@@ -1935,10 +2035,10 @@ export default function SellerClient({
                             m.seller?.companyName === user.companyName && m.sellerId !== user.id
                           );
                           return (
-                            <tr key={slot.id} className="hover:bg-blue-50/50 transition-colors group">
-                              <td className="px-6 py-5">
+                            <tr key={slot.id} className="hover:bg-slate-50 transition-colors group">
+                              <td className="px-6 py-6">
                                 <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-slate-100 rounded-[12px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                  <div className="w-11 h-11 bg-slate-50 rounded-[14px] border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
                                     <Building2 size={20} />
                                   </div>
                                   <div className="min-w-0">
@@ -1946,45 +2046,50 @@ export default function SellerClient({
                                       <h4 className="font-black text-sm text-slate-800 truncate">
                                         {displayCompanyName(slot.buyer)}
                                       </h4>
-                                      <span className="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-md font-bold">{slot.buyer?.userType}</span>
+                                      <span className="text-[9px] px-2 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-md font-black uppercase tracking-tighter">{slot.buyer?.userType}</span>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-bold mt-1.5 truncate">
-                                      <UserIcon size={10} className="inline mr-1" />
-                                      {displayName(slot.buyer)}{displayJobTitle(slot.buyer) ? ` (${displayJobTitle(slot.buyer)})` : ""}
+                                    <p className="text-[11px] text-slate-400 font-bold mt-1.5 truncate flex items-center gap-1.5">
+                                      <UserIcon size={12} className="text-slate-300" />
+                                      {displayName(slot.buyer)}{displayJobTitle(slot.buyer) ? <span className="text-slate-300 font-medium">| {displayJobTitle(slot.buyer)}</span> : ""}
                                     </p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-5 max-w-[280px]">
-                                <p className="text-xs text-slate-500 font-medium truncate italic">
-                                  "{slot.buyer?.preferredPartners || (isEn ? "Open to all industries" : "전 분야 가능")}"
-                                </p>
-                              </td>
-                              <td className="px-6 py-5">
-                                <p className="text-xs font-black text-slate-700">{formatDateWithDay(slot.startTime)}</p>
-                                <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(slot.startTime)}</p>
-                              </td>
-                              <td className="px-6 py-5">
-                                <div className="flex items-center gap-1.5">
-                                  <MapPin size={14} className="text-rose-400 shrink-0" />
-                                  <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
-                                    {slot.location || (isEn ? "TBD" : "미정 (행사장 내 안내 예정)")}
-                                  </span>
+                              <td className="px-6 py-6 max-w-[280px]">
+                                <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 group-hover:bg-white transition-colors">
+                                  <p className="text-[11px] text-slate-500 font-bold leading-relaxed line-clamp-2">
+                                    "{slot.buyer?.preferredPartners || (isEn ? "Open to all industries" : "전 분야 가능")}"
+                                  </p>
                                 </div>
                               </td>
-                              <td className="px-6 py-5 text-right min-w-[120px]">
+                              <td className="px-6 py-6">
+                                <div className="space-y-1">
+                                  <p className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                                    <Calendar size={13} className="text-indigo-400" />
+                                    {formatDateWithDay(slot.startTime)}
+                                  </p>
+                                  <p className="text-[11px] font-bold text-slate-400 pl-5">{formatTime24And12(slot.startTime)}</p>
+                                </div>
+                              </td>
+                              <td className="px-6 py-6 font-bold text-xs text-slate-600">
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin size={14} className="text-rose-400 shrink-0" />
+                                  <span className="truncate max-w-[140px]">{slot.location || (isEn ? "TBD" : "행사장 안내")}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-6 text-right">
                                 <div className="flex flex-col items-end gap-2.5">
                                   {colleagueMeeting && (
-                                    <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
-                                      <Users size={12} /> {t.seller.available.duplicateWarning}
+                                    <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 italic">
+                                      <Users size={12} /> ALREADY APPLIED
                                     </span>
                                   )}
                                   <button
                                     onClick={() => handleOpenApplyModal(slot)}
-                                    className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black hover:bg-blue-600 transition-colors shadow-sm flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                                    className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black hover:bg-indigo-600 transition-all shadow-md shadow-slate-100 flex items-center gap-2 group-hover:scale-105"
                                   >
-                                    <Send size={12} />
-                                    <span className="whitespace-nowrap">{t.seller.available.applyBtn}</span>
+                                    <Send size={14} />
+                                    {t.seller.available.applyBtn}
                                   </button>
                                 </div>
                               </td>
@@ -2009,9 +2114,18 @@ export default function SellerClient({
           {/* ── [B] 신청 현황 (PENDING) 섹션 ── */}
           {expandedSection === 'pending' && (
             <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
-              <div>
-                <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">{t.seller.pending.title}</h2>
-                <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(PENDING STATUS)</p>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-200/50 pb-6 md:border-none md:pb-0">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">{t.seller.pending.title}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-indigo-100">Status</span>
+                    <span className="text-sm text-slate-400 font-bold tracking-tight">/ {pendingMeetings.length} {isEn ? "Applications" : "건의 신청"}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <ViewToggle mode={pendingViewMode} setMode={setPendingViewMode} iconOnly={true} />
+                </div>
               </div>
 
               {pendingMeetings.length === 0 ? (
@@ -2022,87 +2136,171 @@ export default function SellerClient({
                   <p className="text-slate-500 font-bold text-sm md:text-base">{t.seller.pending.noPending}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {pendingMeetings.map((m: any) => (
-                    <div key={m.id} className="bg-white rounded-[24px] border border-blue-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
-                      {/* 카드 헤더 */}
-                      <div className="p-5 border-b border-blue-50 bg-blue-50/30 flex justify-between items-start">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-blue-100 flex items-center justify-center text-blue-500 shrink-0">
-                            <Building2 size={20} />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
-                              {displayCompanyName(m.buyer)}
-                            </h4>
-                            <p className="text-[11px] font-bold text-slate-500 mt-0.5 flex items-center gap-1">
-                              <UserIcon size={12} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
-                              {m.pic && <span className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md border border-blue-100 ml-1 font-black">PIC</span>}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-2.5 shrink-0 ml-2">
-                          {/* ── 숫자 카운트 채팅 알림 배지 (LinkedIn 메시지 버튼 스타일) ── */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
-                            className={`relative px-3 h-9 rounded-xl shadow-sm border transition-colors flex items-center justify-center shrink-0 gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white animate-[pulse_2s_infinite] shadow-rose-200' : 'bg-indigo-50 border-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}
-                          >
-                            <MessageCircle size={18} />
-                            {unreadMeetings.includes(m.id) && (
-                              <span className="text-[10px] font-black">{isEn ? 'New Message' : '새 메시지'}</span>
-                            )}
-                          </button>
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse">
-                              {t.seller.pending.reviewing}
-                            </span>
-                            {m.meetingType === "DIRECT_REQUEST" && (
-                              <span className="px-2 py-0.5 bg-amber-100 text-amber-600 rounded-md text-[8px] font-black uppercase tracking-widest border border-amber-200">
-                                DIRECT PROPOSE
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-5 flex-1 flex flex-col gap-4">
-                        {/* ── 신청 메시지 (Proposal) — LinkedIn InMail / Upwork 스타일: 메시지 우선 배치 ── */}
-                        {m.proposal && (
-                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 p-4 rounded-2xl border border-blue-100">
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                              <FileText size={12} /> {isEn ? "My Proposal" : "보낸 제안 메시지"}
-                            </p>
-                            <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3">
-                              &ldquo;{m.proposal}&rdquo;
-                            </p>
-                          </div>
-                        )}
-
-                        {/* ── 일정 정보 ── */}
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                            <Calendar size={12} /> {isEn ? "Applied Schedule" : "신청 일정"}
-                          </p>
-                          {m.timeSlot?.status === "TBD" ? (
-                            <p className="text-sm font-bold text-slate-700">{isEn ? "TBD (To be determined)" : "미정 (추후 협의)"}</p>
-                          ) : (
-                            <>
-                              <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
-                              <p className="text-xs font-bold text-slate-500">{formatTime24And12(m.timeSlot?.startTime)}</p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="px-5 pb-5 mt-auto">
-                        <div className="bg-slate-50 text-slate-600 text-[11px] font-semibold p-4 rounded-[16px] leading-relaxed border border-slate-100">
-                          {t.seller.pending.statusInfo}
-                        </div>
+                <>
+                  {/* ──── 테이블 뷰 (신청 현황) ──── */}
+                  {pendingViewMode === 'table' && (
+                    <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[900px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {isEn ? "Partner" : "파트너사 (Partner)"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                {isEn ? "PIC Info" : "담당자 정보"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                {isEn ? "My Proposal" : "제안 메시지"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                {isEn ? "Applied Schedule" : "신청 일정"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">
+                                {isEn ? "Status" : "상태 / 채팅"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {pendingMeetings.map((m: any) => (
+                              <tr key={m.id} className="hover:bg-slate-50/50 transition-colors group">
+                                <td className="px-6 py-5">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 bg-slate-100 rounded-[10px] flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Building2 size={18} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4 className="font-black text-sm text-slate-800 truncate">
+                                        {displayCompanyName(m.buyer)}
+                                      </h4>
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-500 border border-blue-100 rounded-md font-black mt-1 inline-block uppercase tracking-tighter">{m.buyer?.userType}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <p className="text-xs font-bold text-slate-700">
+                                    {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">{displayJobTitle(m.buyer) || "N/A"}</p>
+                                </td>
+                                <td className="px-6 py-5 max-w-[240px]">
+                                  <div className="text-[11px] text-slate-500 line-clamp-2 italic font-medium">
+                                    {m.proposal ? `"${m.proposal}"` : "-"}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <p className="text-xs font-black text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
+                                  <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(m.timeSlot?.startTime)}</p>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className="flex items-center gap-2">
+                                      {m.meetingType === "DIRECT_REQUEST" && (
+                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-600 rounded-md text-[8px] font-black uppercase tracking-widest border border-amber-200">DIRECT</span>
+                                      )}
+                                      <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                        {t.seller.pending.reviewing}
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
+                                      className={`relative px-3 h-8 rounded-xl shadow-sm border transition-all flex items-center justify-center shrink-0 gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white animate-pulse shadow-rose-200' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900'}`}
+                                    >
+                                      <MessageCircle size={14} />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">{isEn ? 'Chat' : '채팅'}</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {/* ──── 카드 뷰 (신청 현황) ──── */}
+                  {pendingViewMode === 'card' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2">
+                      {pendingMeetings.map((m: any) => (
+                        <div key={m.id} className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all group">
+                          <div className="p-5 border-b border-blue-50 bg-blue-50/20 flex justify-between items-start transition-colors group-hover:bg-blue-50/40">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-blue-100 flex items-center justify-center text-blue-500 shrink-0">
+                                <Building2 size={20} />
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
+                                  {displayCompanyName(m.buyer)}
+                                </h4>
+                                <p className="text-[10px] font-bold text-slate-500 mt-0.5 flex items-center gap-1">
+                                  <UserIcon size={12} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                  {m.pic && <span className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md border border-blue-100 ml-1 font-black uppercase">PIC</span>}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
+                                className={`h-9 px-3 rounded-2xl shadow-sm border transition-all flex items-center gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white animate-[pulse_2s_infinite] shadow-rose-200' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white'}`}
+                              >
+                                <MessageCircle size={18} />
+                                {unreadMeetings.includes(m.id) && (
+                                  <span className="text-[10px] font-black uppercase animate-pulse">{isEn ? 'New' : '새 메시지'}</span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="p-5 flex-1 flex flex-col gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 bg-blue-100 text-blue-600 rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                {t.seller.pending.reviewing}
+                              </span>
+                              {m.meetingType === "DIRECT_REQUEST" && (
+                                <span className="px-2.5 py-1 bg-amber-100 text-amber-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-amber-200">
+                                  DIRECT PROPOSE
+                                </span>
+                              )}
+                            </div>
+
+                            {m.proposal && (
+                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                                  <FileText size={12} /> {isEn ? "My Proposal" : "보낸 제안 메시지"}
+                                </p>
+                                <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3 italic">
+                                  &ldquo;{m.proposal}&rdquo;
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="space-y-1.5 pt-2 border-t border-slate-50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Calendar size={12} /> {isEn ? "Applied Schedule" : "신청 일정"}
+                              </p>
+                              <div className="bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-100 shadow-inner">
+                                {m.timeSlot?.status === "TBD" ? (
+                                  <p className="text-sm font-bold text-slate-700">{isEn ? "TBD" : "추후 협의"}</p>
+                                ) : (
+                                  <>
+                                    <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
+                                    <p className="text-xs font-bold text-slate-500 mt-0.5">{formatTime24And12(m.timeSlot?.startTime)}</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-5 pb-5">
+                            <div className="bg-slate-50 text-slate-500 text-[11px] font-bold p-3.5 rounded-[16px] leading-relaxed border border-slate-100 italic transition-colors group-hover:bg-indigo-50/50 group-hover:border-indigo-100 group-hover:text-indigo-600">
+                              {t.seller.pending.statusInfo}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </section>
           )}
@@ -2110,14 +2308,35 @@ export default function SellerClient({
           {/* ── [C] 확정 일정 (CONFIRMED) 섹션 ── */}
           {expandedSection === 'confirmed' && (
             <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-0 border-b border-slate-200/50 pb-4 md:border-none md:pb-0">
-                <div>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-200/50 pb-6 md:border-none md:pb-0">
+                <div className="flex-1">
                   <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">{t.seller.confirmed.title}</h2>
-                  <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(CONFIRMED MEETINGS)</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-emerald-100">Schedule</span>
+                    <span className="text-sm text-slate-400 font-bold tracking-tight">/ {totalUpcomingConfirmedCount} {isEn ? "Meetings" : "건의 확정"}</span>
+                  </div>
                 </div>
-                <button onClick={downloadExcel} className="w-full md:w-auto bg-slate-900 text-white px-5 py-3 md:px-6 md:py-3.5 rounded-[16px] md:rounded-2xl text-[12px] md:text-xs font-black shadow-md md:shadow-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors">
-                  <Download size={16} /> {t.seller.confirmed.downloadBtn}
-                </button>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto mt-2 md:mt-0">
+                  <div className="flex items-center justify-between gap-4">
+                    <button onClick={downloadExcel} className="shrink-0 bg-slate-900 text-white px-5 py-3 rounded-[16px] text-[12px] font-black shadow-md flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors">
+                      <Download size={16} /> {t.seller.confirmed.downloadBtn}
+                    </button>
+                    <ViewToggle mode={confirmedViewMode} setMode={setConfirmedViewMode} iconOnly={true} />
+                  </div>
+
+                  <div className="flex bg-slate-100 p-1 rounded-[16px] shadow-inner">
+                    {(['UPCOMING', 'PAST', 'ALL'] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setConfirmedFilter(f)}
+                        className={`flex-1 md:flex-none px-5 py-2.5 rounded-[12px] text-xs font-black transition-all ${confirmedFilter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        {f === 'UPCOMING' ? t.seller.confirmed.upcoming : f === 'PAST' ? t.seller.confirmed.past : t.seller.confirmed.all}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {displayConfirmed.length === 0 ? (
@@ -2128,162 +2347,353 @@ export default function SellerClient({
                   <p className="text-slate-500 font-bold text-sm md:text-base">{t.seller.confirmed.noConfirmed}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {displayConfirmed.map((m: any) => (
-                    <div key={m.id} className="bg-white rounded-[24px] border-2 border-emerald-100 shadow-lg overflow-hidden flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all">
-                      <div className="p-6 border-b border-emerald-50 flex justify-between items-start">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                            <Building2 size={24} />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-black text-slate-800 text-lg md:text-xl truncate">
-                              {displayCompanyName(m.buyer)}
-                            </h4>
-                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1 truncate">
-                              <UserIcon size={12} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
-                              {m.pic && <span className="text-[10px] font-black bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-md border border-emerald-100 ml-1">PIC</span>}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-6 flex-1 flex flex-col gap-5 bg-gradient-to-b from-transparent to-emerald-50/30">
-                        <div className="flex justify-between items-center w-full">
-                          <span className="px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-[10px] md:text-[11px] font-black uppercase tracking-widest shadow-sm shadow-emerald-200 flex items-center gap-1.5 w-fit">
-                            <CheckCircle2 size={14} /> {t.seller.confirmed.matchConfirmed}
-                          </span>
-                          {/* ── 숫자 카운트 채팅 알림 배지 (LinkedIn 스타일) ── */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
-                            className={`relative px-3 h-10 rounded-2xl shadow-sm border transition-colors flex items-center justify-center shrink-0 gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white shadow-rose-200 animate-[pulse_2s_infinite]' : 'bg-indigo-50 border-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}
-                          >
-                            <MessageCircle size={20} />
-                            {unreadMeetings.includes(m.id) && (
-                              <span className="text-[11px] font-black">{isEn ? 'New Message' : '새 메시지'}</span>
-                            )}
-                          </button>
-                        </div>
-
-                        <div className="space-y-2 bg-white p-4 rounded-2xl border border-emerald-100/50 shadow-sm">
-                          {m.timeSlot?.status === "TBD" ? (
-                            <div className="flex items-center gap-2 text-slate-700">
-                              <Calendar size={16} className="text-emerald-500" />
-                              <span className="text-sm font-bold">{isEn ? "TBD (To be determined)" : "일정 미정 (추후 시간 협의)"}</span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-2 text-slate-700">
-                                <Calendar size={16} className="text-emerald-500" />
-                                <span className="text-sm font-bold">{formatDateWithDay(m.timeSlot.startTime)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-slate-700">
-                                <Clock size={16} className="text-emerald-500" />
-                                <span className="text-sm font-bold">{formatTime24And12(m.timeSlot.startTime)}</span>
-                              </div>
-                            </>
-                          )}
-                          <div className="flex items-center gap-2 text-slate-700 pt-2 mt-2 border-t border-slate-100">
-                            <MapPin size={16} className="text-rose-400" />
-                            <span className="text-sm font-bold">{m.location || (isEn ? "TBD" : "미정 (행사장 내 안내 예정)")}</span>
-                          </div>
-                        </div>
+                <>
+                  {/* ──── 테이블 뷰 (확정 일정) ──── */}
+                  {confirmedViewMode === 'table' && (
+                    <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[950px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {isEn ? "Partner" : "참여사 (Partner)"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {isEn ? "PIC Info" : "담당자 정보"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {isEn ? "Schedule" : "확정 일정"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {isEn ? "Location" : "장소 (Location)"}
+                              </th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">
+                                {isEn ? "Status" : "상태 / 채팅"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {displayConfirmed.map((m: any, idx: number) => {
+                              const isNewConfirmed = idx >= displayConfirmed.length - frozenNewConfirmedCount;
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const isPast = m.timeSlot?.startTime && new Date(m.timeSlot.startTime) < today;
+                              return (
+                                <tr key={m.id} className={`hover:bg-emerald-50/30 transition-colors group ${isNewConfirmed ? 'bg-rose-50/20' : ''} ${isPast ? 'grayscale opacity-70' : ''}`}>
+                                  <td className="px-6 py-5">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 bg-white rounded-xl shadow-sm border flex items-center justify-center shrink-0 ${isNewConfirmed ? 'border-rose-200 text-rose-500' : 'border-emerald-100 text-emerald-600'}`}>
+                                        <Building2 size={20} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h4 className="font-black text-sm text-slate-800 truncate">
+                                          {displayCompanyName(m.buyer)}
+                                        </h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-[9px] px-1.5 py-0.5 bg-slate-50 text-slate-500 border border-slate-100 rounded-md font-black uppercase tracking-tighter">{m.buyer?.userType}</span>
+                                          {isNewConfirmed && <span className="text-[8px] px-1.5 py-0.5 bg-rose-500 text-white rounded-md font-black animate-pulse">NEW</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <p className="text-xs font-bold text-slate-700">
+                                      {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-0.5 italic">{displayJobTitle(m.buyer) || "N/A"}</p>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    {m.timeSlot?.status === "TBD" ? (
+                                      <span className="text-xs font-bold text-slate-400">{isEn ? "TBD" : "미정"}</span>
+                                    ) : (
+                                      <>
+                                        <p className="text-xs font-black text-slate-700">{formatDateWithDay(m.timeSlot.startTime)}</p>
+                                        <p className="text-[11px] font-bold text-slate-500 mt-1">{formatTime24And12(m.timeSlot.startTime)}</p>
+                                      </>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                                      <MapPin size={14} className="text-rose-400 shrink-0" />
+                                      <span className="truncate max-w-[150px]">{m.location || (isEn ? "TBD" : "행사장 안내")}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5 text-right">
+                                    <div className="flex flex-col items-end gap-2">
+                                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
+                                        {t.seller.confirmed.matchConfirmed}
+                                      </span>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
+                                        className={`relative px-3 h-9 rounded-2xl shadow-sm border transition-all flex items-center justify-center shrink-0 gap-1.5 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white shadow-rose-200 animate-[pulse_2s_infinite]' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900'}`}
+                                      >
+                                        <MessageCircle size={16} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">{isEn ? 'Message' : '메시지'}</span>
+                                        {unreadMeetings.includes(m.id) && (
+                                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full"></span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {/* ──── 카드 뷰 (확정 일정) ──── */}
+                  {confirmedViewMode === 'card' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2">
+                      {displayConfirmed.map((m: any, idx: number) => {
+                        const isNewConfirmed = idx >= displayConfirmed.length - frozenNewConfirmedCount;
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const isPast = m.timeSlot?.startTime && new Date(m.timeSlot.startTime) < today;
+                        return (
+                          <div key={m.id} className={`bg-white rounded-[24px] border-2 shadow-sm overflow-hidden flex flex-col transition-all group ${isNewConfirmed ? "border-rose-400 ring-2 ring-rose-50 shadow-rose-100" : "border-slate-100 hover:border-emerald-200 hover:shadow-xl hover:-translate-y-1"} ${isPast ? 'grayscale opacity-70' : ''}`}>
+                            <div className={`p-6 border-b flex justify-between items-start transition-colors ${isNewConfirmed ? 'bg-rose-50/30' : 'bg-emerald-50/10 group-hover:bg-emerald-50/30'}`}>
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div className={`w-12 h-12 bg-white rounded-xl shadow-sm border flex items-center justify-center shrink-0 ${isNewConfirmed ? 'border-rose-200 text-rose-500' : 'border-emerald-100 text-emerald-600'}`}>
+                                  <Building2 size={24} />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-black text-slate-800 text-lg md:text-xl truncate">
+                                    {displayCompanyName(m.buyer)}
+                                  </h4>
+                                  <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1 truncate italic">
+                                    <UserIcon size={12} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                    {m.pic && <span className="text-[10px] font-black bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded-md border border-slate-100 ml-1 uppercase">PIC</span>}
+                                  </p>
+                                </div>
+                              </div>
+                              {isNewConfirmed && (
+                                <span className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-rose-200">NEW</span>
+                              )}
+                            </div>
+
+                            <div className="p-6 flex-1 flex flex-col gap-5 bg-gradient-to-b from-transparent to-slate-50/30">
+                              <div className="flex justify-between items-center w-full">
+                                <span className="px-3.5 py-1.5 bg-emerald-500 text-white rounded-xl text-[10px] md:text-[11px] font-black uppercase tracking-widest shadow-md shadow-emerald-100 flex items-center gap-2 w-fit">
+                                  <CheckCircle2 size={16} /> {t.seller.confirmed.matchConfirmed}
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedChatMeeting(m); }}
+                                  className={`relative px-4 h-10 rounded-2xl shadow-sm border transition-all flex items-center justify-center shrink-0 gap-2 ${unreadMeetings.includes(m.id) ? 'bg-rose-500 border-rose-600 text-white shadow-rose-200 animate-pulse' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white'}`}
+                                >
+                                  <MessageCircle size={20} />
+                                  <span className="text-[11px] font-black uppercase tracking-widest">{isEn ? 'Chat' : '채팅'}</span>
+                                  {unreadMeetings.includes(m.id) && (
+                                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 border-2 border-white rounded-full"></span>
+                                  )}
+                                </button>
+                              </div>
+
+                              <div className="space-y-3 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm group-hover:border-emerald-100 transition-colors">
+                                {m.timeSlot?.status === "TBD" ? (
+                                  <div className="flex items-center gap-3 text-slate-400">
+                                    <Calendar size={18} />
+                                    <span className="text-sm font-bold italic">{isEn ? "Schedule TBD" : "일정 협의 중"}</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-3 text-slate-700">
+                                      <Calendar size={18} className="text-emerald-500" />
+                                      <span className="text-sm font-black tracking-tight">{formatDateWithDay(m.timeSlot.startTime)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-slate-700">
+                                      <Clock size={18} className="text-emerald-500" />
+                                      <span className="text-sm font-black tracking-tight">{formatTime24And12(m.timeSlot.startTime)}</span>
+                                    </div>
+                                  </>
+                                )}
+                                <div className="flex items-center gap-3 text-slate-700 pt-3 mt-3 border-t border-slate-50">
+                                  <MapPin size={18} className="text-rose-400" />
+                                  <span className="text-sm font-black tracking-tight">{m.location || (isEn ? "In-Person (TBD)" : "행사장 내 안내")}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </section>
           )}
 
-          {/* ── [D] 거절 이력 (REJECTED) 섹션 ── */}
+          {/* ── [D] 거절 내역 (REJECTED) 섹션 ── */}
           {expandedSection === 'rejected' && (
             <section className="space-y-6 md:space-y-10 px-1 md:px-2 animate-in fade-in slide-in-from-bottom-4">
-              <div className="border-b border-slate-200/50 pb-4 md:border-none md:pb-0">
-                <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">{t.seller.rejected.title}</h2>
-                <p className="text-sm text-slate-400 font-bold uppercase mt-1 tracking-widest">(REJECTED MEETINGS)</p>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-200/50 pb-6 md:border-none md:pb-0">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">{isEn ? "Rejected History" : "거절 내역"}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-rose-100">Rejected</span>
+                    <span className="text-sm text-slate-400 font-bold tracking-tight">/ {rejectedMeetings.length} {isEn ? "Meetings" : "건"}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <ViewToggle mode={rejectedViewMode} setMode={setRejectedViewMode} iconOnly={true} />
+                </div>
               </div>
 
               {rejectedMeetings.length === 0 ? (
                 <div className="bg-white p-12 md:p-20 rounded-[40px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center max-w-4xl mx-auto">
                   <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
-                    <XCircle size={32} />
+                    <Ban size={32} />
                   </div>
                   <p className="text-slate-500 font-bold text-sm md:text-base">{t.seller.rejected.noRejected}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {rejectedMeetings.map((m: any, idx: number) => {
-                    const isExpired = m.rejectionReason === 'EXPIRED_SCHEDULE';
-                    const isNewRejected = idx >= rejectedMeetings.length - frozenNewRejectedCount;
-                    const rejectionText = isExpired
-                      ? (isEn ? 'Automatically rejected — meeting time has passed.' : '일정이 지나 자동 처리된 미팅입니다.')
-                      : (m.rejectionReason || t.seller.rejected.noReason);
+                <>
+                  {/* ──── 테이블 뷰 (거절 내역) ──── */}
+                  {rejectedViewMode === 'table' && (
+                    <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[950px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Partner" : "파트너사"}</th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{isEn ? "Applied Schedule" : "신청 일정"}</th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Reason" : "거절 사유"}</th>
+                              <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">{isEn ? "Chat" : "채팅"}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {rejectedMeetings.map((m: any, idx: number) => {
+                              const isExpired = m.rejectionReason === 'EXPIRED_SCHEDULE';
+                              const isNewRejected = idx >= rejectedMeetings.length - frozenNewRejectedCount;
+                              const rejectionText = isExpired
+                                ? (isEn ? "Automatically rejected — meeting time has passed." : "일정이 지나 자동 처리된 미팅입니다.")
+                                : (m.rejectionReason || t.seller.rejected.noReason);
 
-                    return (
-                    <div key={m.id} className={`bg-white rounded-[24px] border shadow-sm overflow-hidden flex flex-col transition-all ${isExpired ? 'border-amber-200' : 'border-rose-100'} ${isNewRejected ? 'ring-2 ring-rose-400 ring-offset-2 hover:shadow-lg' : 'hover:shadow-md'}`}>
-                      <div className={`p-5 border-b flex justify-between items-start ${isExpired ? 'bg-amber-50/40 border-amber-50' : 'bg-rose-50/30 border-rose-50'}`}>
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className={`w-10 h-10 bg-white rounded-xl shadow-sm border flex items-center justify-center shrink-0 ${isExpired ? 'border-amber-200 text-amber-500' : 'border-rose-100 text-rose-500'}`}>
-                            <Building2 size={20} />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
-                              {displayCompanyName(m.buyer)}
-                            </h4>
-                            <p className="text-[10px] font-bold text-slate-500 mt-0.5 flex items-center gap-1 truncate">
-                              <UserIcon size={10} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
-                              {m.pic && <span className="text-[9px] font-black bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-100 ml-1 uppercase">PIC</span>}
-                            </p>
-                          </div>
-                        </div>
-                        {isExpired ? (
-                          <div className="flex items-center gap-2 ml-2">
-                            {isNewRejected && (
-                              <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-amber-200 shrink-0">NEW</span>
-                            )}
-                            <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0 flex items-center gap-1">
-                              <Clock size={10}/> EXPIRED
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 ml-2">
-                            {isNewRejected && (
-                              <span className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-rose-200 shrink-0">NEW</span>
-                            )}
-                            <span className="px-2.5 py-1 bg-rose-100 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0">REJECTED</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-5 flex-1 flex flex-col gap-4">
-                        <div className="space-y-1.5">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                            <Calendar size={12} /> {isEn ? "Schedule" : "일정"}
-                          </p>
-                          {m.timeSlot?.status === "TBD" ? (
-                            <p className="text-sm font-bold text-slate-700">{isEn ? "TBD" : "미정"}</p>
-                          ) : (
-                            <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
-                          )}
-                        </div>
-                        <div className="mt-auto pt-4 border-t border-slate-100">
-                          <p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2 ${isExpired ? 'text-amber-500' : 'text-rose-400'}`}>
-                            <AlertCircle size={12} /> {t.seller.rejected.reason}
-                          </p>
-                          <div className={`text-[13px] font-semibold p-4 rounded-[16px] leading-relaxed italic border break-keep ${
-                            isExpired
-                              ? 'bg-amber-50/50 text-amber-700 border-amber-100/50'
-                              : 'bg-rose-50/50 text-rose-700 border-rose-100/50'
-                          }`}>
-                            "{rejectionText}"
-                          </div>
-                        </div>
+                              return (
+                                <tr key={m.id} className={`hover:bg-slate-50 transition-colors group ${isNewRejected ? 'bg-rose-50/20' : 'grayscale opacity-60'}`}>
+                                  <td className="px-6 py-6">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${isExpired ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-white border-rose-100 text-rose-500 shadow-sm'}`}>
+                                        <Building2 size={20} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-black text-sm text-slate-800 truncate">{displayCompanyName(m.buyer)}</p>
+                                          {isNewRejected && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter animate-pulse shadow-sm shadow-rose-200">NEW</span>}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
+                                          <UserIcon size={10} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-6 whitespace-nowrap">
+                                    <div className="text-[13px] font-black text-slate-700">{m.timeSlot?.status === "TBD" ? (isEn ? "TBD" : "미정") : formatDateWithDay(m.timeSlot?.startTime)}</div>
+                                    <div className="text-[11px] font-bold text-slate-500 mt-0.5">{m.timeSlot?.status === "TBD" ? "" : formatTime24And12(m.timeSlot?.startTime || "")}</div>
+                                  </td>
+                                  <td className="px-6 py-6">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${isExpired ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
+                                        {isExpired ? 'Expired' : 'Rejected'}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-bold leading-relaxed line-clamp-2 max-w-md italic">
+                                      "{rejectionText}"
+                                    </p>
+                                  </td>
+                                  <td className="px-6 py-6 text-right">
+                                    <button onClick={() => setSelectedChatMeeting(m)} className={`relative p-2.5 rounded-xl transition-all ${unreadMeetings.includes(m.id) ? 'bg-rose-500 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600'}`}>
+                                      <MessageCircle size={18} />
+                                      {unreadMeetings.includes(m.id) && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                    );
-                  })}
-                </div>
+                  )}
+
+                  {/* ──── 카드 뷰 (거절 내역) ──── */}
+                  {rejectedViewMode === 'card' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2">
+                      {rejectedMeetings.map((m: any, idx: number) => {
+                        const isExpired = m.rejectionReason === 'EXPIRED_SCHEDULE';
+                        const isNewRejected = idx >= rejectedMeetings.length - frozenNewRejectedCount;
+                        const rejectionText = isExpired
+                          ? (isEn ? 'Automatically rejected — meeting time has passed.' : '일정이 지나 자동 처리된 미팅입니다.')
+                          : (m.rejectionReason || t.seller.rejected.noReason);
+
+                        return (
+                          <div key={m.id} className={`bg-white rounded-[24px] border shadow-sm overflow-hidden flex flex-col transition-all ${isExpired ? 'border-amber-200' : 'border-rose-100'} ${isNewRejected ? 'ring-2 ring-rose-400 ring-offset-2 hover:shadow-lg' : 'hover:shadow-md grayscale opacity-60'}`}>
+                            <div className={`p-5 border-b flex justify-between items-start ${isExpired ? 'bg-amber-50/40 border-amber-50' : 'bg-rose-50/30 border-rose-50'}`}>
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div className={`w-10 h-10 bg-white rounded-xl shadow-sm border flex items-center justify-center shrink-0 ${isExpired ? 'border-amber-200 text-amber-500' : 'border-rose-100 text-rose-500'}`}>
+                                  <Building2 size={20} />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-black text-slate-800 text-base md:text-lg truncate">
+                                    {displayCompanyName(m.buyer)}
+                                  </h4>
+                                  <p className="text-[10px] font-bold text-slate-500 mt-0.5 flex items-center gap-1 truncate">
+                                    <UserIcon size={10} /> {m.pic ? ((isEn && m.pic.nameEn) ? m.pic.nameEn : m.pic.name) : (displayName(m.buyer) || "-")}
+                                    {m.pic && <span className="text-[9px] font-black bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-100 ml-1 uppercase">PIC</span>}
+                                  </p>
+                                </div>
+                              </div>
+                              {isExpired ? (
+                                <div className="flex items-center gap-2 ml-2">
+                                  {isNewRejected && (
+                                    <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-amber-200 shrink-0">NEW</span>
+                                  )}
+                                  <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0 flex items-center gap-1">
+                                    <Clock size={10} /> EXPIRED
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 ml-2">
+                                  {isNewRejected && (
+                                    <span className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse shadow-md shadow-rose-200 shrink-0">NEW</span>
+                                  )}
+                                  <span className="px-2.5 py-1 bg-rose-100 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0">REJECTED</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-5 flex-1 flex flex-col gap-4">
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                  <Calendar size={12} /> {isEn ? "Schedule" : "일정"}
+                                </p>
+                                {m.timeSlot?.status === "TBD" ? (
+                                  <p className="text-sm font-bold text-slate-700">{isEn ? "TBD" : "미정"}</p>
+                                ) : (
+                                  <p className="text-sm font-bold text-slate-700">{formatDateWithDay(m.timeSlot?.startTime)}</p>
+                                )}
+                              </div>
+                              <div className="mt-auto pt-4 border-t border-slate-100">
+                                <p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2 ${isExpired ? 'text-amber-500' : 'text-rose-400'}`}>
+                                  <AlertCircle size={12} /> {t.seller.rejected.reason}
+                                </p>
+                                <div className={`text-[13px] font-semibold p-4 rounded-[16px] leading-relaxed italic border break-keep ${isExpired
+                                  ? 'bg-amber-50/50 text-amber-700 border-amber-100/50'
+                                  : 'bg-rose-50/50 text-rose-700 border-rose-100/50'
+                                  }`}>
+                                  "{rejectionText}"
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </section>
           )}
@@ -2343,8 +2753,8 @@ export default function SellerClient({
                         <label
                           key={slot.id}
                           className={`flex items-start gap-4 p-5 md:p-6 rounded-[32px] border-2 transition-all cursor-pointer relative group overflow-hidden ${selectedSlotId === slot.id
-                              ? "bg-blue-50/40 border-blue-600 shadow-xl shadow-blue-100/30"
-                              : "bg-white border-slate-100 hover:border-slate-300 hover:shadow-md"
+                            ? "bg-blue-50/40 border-blue-600 shadow-xl shadow-blue-100/30"
+                            : "bg-white border-slate-100 hover:border-slate-300 hover:shadow-md"
                             }`}
                         >
                           <div className="mt-[3px] flex items-center justify-center shrink-0">

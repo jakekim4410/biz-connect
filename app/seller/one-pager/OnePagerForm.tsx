@@ -162,9 +162,9 @@ const OP_TEXT = {
     industrySector: "Industry Sector",
     industryPlaceholder: "Select a category",
     industryCustomPlaceholder: "Enter custom sector (e.g. Space Tech)",
-    yearFounded: "Year Founded",
+    yearFounded: "Founded",
     yearFoundedPlaceholder: "e.g. 2024",
-    investmentStage: "Investment Stage",
+    investmentStage: "Stage",
     investmentStagePlaceholder: "e.g. Seed",
     monthlyRevenue: "Monthly Revenue",
     monthlyRevenuePlaceholder: "$ 10,000",
@@ -221,7 +221,7 @@ function FloatingInput({
         onClick={() => inputRef.current?.focus()}
         className={`
           absolute left-4 font-black uppercase tracking-widest pointer-events-none
-          transition-all duration-200 ease-out z-10
+          transition-all duration-200 ease-out z-10 whitespace-nowrap truncate max-w-[calc(100%-2rem)]
           ${isFloated
             ? "top-2 text-[9px] text-indigo-500"
             : "top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
@@ -385,7 +385,7 @@ function DarkFloatingInput({
         <label
           className={`
             absolute left-4 font-black uppercase tracking-widest pointer-events-none
-            transition-all duration-200 ease-out z-10
+            transition-all duration-200 ease-out z-10 whitespace-nowrap truncate max-w-[calc(100%-2rem)]
             ${isFloated
               ? "top-2 text-[9px] text-indigo-400"
               : "top-1/2 -translate-y-1/2 text-[10px] text-slate-400"

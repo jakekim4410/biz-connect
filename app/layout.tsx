@@ -28,7 +28,10 @@ export default async function RootLayout({
 
                 {/* 왼쪽 영역: 로고 + 배지 (shrink-0으로 로고가 찌그러지지 않게 함) */}
                 <div className="flex items-center gap-2 sm:gap-4 shrink-0 overflow-hidden">
-                  <Link href="/" className="font-black text-xl tracking-tighter hover:opacity-80 transition-all flex items-center shrink-0">
+                  <Link 
+                    href={session ? (user.role === "ADMIN" ? "/admin" : user.role === "BUYER" ? "/buyer" : "/seller") : "/"} 
+                    className="font-black text-xl tracking-tighter hover:opacity-80 transition-all flex items-center shrink-0"
+                  >
                     <span className="text-[#111827]">Biz</span>
                     <span className="text-[#2563eb]">Connect</span>
                   </Link>

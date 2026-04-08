@@ -87,30 +87,37 @@ export async function updateProfileAction(formData: FormData) {
       const investmentStage  = formData.get("investmentStage") as string;
       const yearFounded      = formData.get("yearFounded") as string;
 
+      const currentOnePager = await db.onePager.findUnique({ where: { userId } });
+      
+      const getFormVal = (key: string, fallback: string = "") => {
+        const val = formData.get(key);
+        return (val !== null) ? (val as string) : fallback;
+      };
+
       // ── onePager 필드 (셀러 전용) ──
-      const onePagerData = {
-        companyNameKr:  newCompanyName,
-        companyNameEn,
-        ceoName:        ceoNameKo,
-        ceoNameEn,
-        picName:        formData.get("picName") as string,
-        picNameEn:      formData.get("picNameEn") as string,
-        picTitle:       formData.get("picTitle") as string,
-        picTitleEn:     formData.get("picTitleEn") as string,
-        productType:    formData.get("productType") as string,
-        solutionSummary: formData.get("solutionSummary") as string,
-        problem:        formData.get("problem") as string,
-        solution:       formData.get("solution") as string,
-        traction:       formData.get("traction") as string,
-        bizModel:       formData.get("bizModel") as string,
-        primaryTech,
-        industrySector,
-        yearFounded,
-        investmentStage,
-        monthlyRevenue: formData.get("monthlyRevenue") as string,
-        pitchDeckUrl:   formData.get("pitchDeckUrl") as string,
-        contactEmail:   formData.get("contactEmail") as string,
-        linkedinUrl,
+      const onePagerData: any = {
+        companyNameKr:  newCompanyName || currentOnePager?.companyNameKr || "",
+        companyNameEn:  companyNameEn || currentOnePager?.companyNameEn || "",
+        ceoName:        ceoNameKo || currentOnePager?.ceoName || "",
+        ceoNameEn:      ceoNameEn || currentOnePager?.ceoNameEn || "",
+        picName:        getFormVal("picName", currentOnePager?.picName || ""),
+        picNameEn:      getFormVal("picNameEn", currentOnePager?.picNameEn || ""),
+        picTitle:       getFormVal("picTitle", currentOnePager?.picTitle || ""),
+        picTitleEn:     getFormVal("picTitleEn", currentOnePager?.picTitleEn || ""),
+        productType:    getFormVal("productType", currentOnePager?.productType || ""),
+        solutionSummary: getFormVal("solutionSummary", currentOnePager?.solutionSummary || ""),
+        problem:        getFormVal("problem", currentOnePager?.problem || ""),
+        solution:       getFormVal("solution", currentOnePager?.solution || ""),
+        traction:       getFormVal("traction", currentOnePager?.traction || ""),
+        bizModel:       getFormVal("bizModel", currentOnePager?.bizModel || ""),
+        primaryTech:    primaryTech || currentOnePager?.primaryTech || "",
+        industrySector: industrySector || currentOnePager?.industrySector || "",
+        yearFounded:    yearFounded || currentOnePager?.yearFounded || "",
+        investmentStage: investmentStage || currentOnePager?.investmentStage || "",
+        monthlyRevenue: getFormVal("monthlyRevenue", currentOnePager?.monthlyRevenue || ""),
+        pitchDeckUrl:   getFormVal("pitchDeckUrl", currentOnePager?.pitchDeckUrl || ""),
+        contactEmail:   getFormVal("contactEmail", currentOnePager?.contactEmail || ""),
+        linkedinUrl:    linkedinUrl || currentOnePager?.linkedinUrl || "",
       };
 
       await db.$transaction(async (tx) => {
