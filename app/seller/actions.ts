@@ -676,7 +676,6 @@ export async function acceptDirectMeetingWithNewSlotAction(
     return { error: "처리 중 오류가 발생했습니다." };
   }
 }
-}
 
 // S6. 셀러가 받은 다이렉트 제안 거절
 export async function rejectDirectMeetingAsSellerAction(meetingId: number, reason?: string, locale: Locale = "ko") {
