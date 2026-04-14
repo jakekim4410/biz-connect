@@ -17,6 +17,7 @@ import {
   deleteSellerSlotAction,
   handleSellerSlotStatusAction,
   acceptDirectMeetingAsSellerAction,
+  acceptDirectMeetingWithNewSlotAction,
   rejectDirectMeetingAsSellerAction,
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
