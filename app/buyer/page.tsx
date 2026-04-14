@@ -7,68 +7,74 @@ import { autoExpirePastMeetings } from "../api/meetings/expire/action";
 
 export default async function BuyerPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || !["BUYER", "ADMIN"].includes((session.user as any).role)) {
     redirect("/login");
   }
 
   const buyerId = Number((session.user as any).id);
   const companyName = (session.user as any).companyName;
+  const now = new Date();
 
-  // 1단계: 기본 사용자 정보 및 기만료 미팅 처리를 병렬로 실행 (속도 향상)
+  // 1단계: 기본 사용자 정보 및 기만료 미팅 처리를 병렬로 실행
   const [user, companyMaster] = await Promise.all([
     db.user.findUnique({ where: { id: buyerId } }),
     db.user.findFirst({ where: { companyName, isMaster: true } }),
     autoExpirePastMeetings()
   ]);
-  
+
   if (!user) redirect("/login");
 
   const masterId = companyMaster?.id || buyerId;
 
-  // 2단계: 핵심 데이터 조회를 병렬로 실행 (커넥션 풀 10개 중 일부를 효율적으로 사용)
+  // 2단계: 핵심 데이터 조회를 병렬로 실행
   const [
     mySlots,
     allMeetingsRaw,
     directRequestsRaw,
     allSellers,
-    teamMembersRaw
+    teamMembersRaw,
+    availableSellerSlots,
   ] = await Promise.all([
+    // 바이어가 개설한 슬롯
     db.timeSlot.findMany({
-      where: user.isMaster 
-        ? { buyer: { companyName: user.companyName } }
-        : { buyerId: buyerId },
-      include: { 
+      where: user.isMaster
+        ? { buyer: { companyName: user.companyName }, slotOwner: "BUYER" }
+        : { buyerId: buyerId, slotOwner: "BUYER" },
+      include: {
         buyer: true,
-        meetings: { 
-          include: { 
-            seller: { include: { onePager: true } }, 
+        meetings: {
+          include: {
+            seller: { include: { onePager: true } },
             timeSlot: true,
             pic: true
-          } 
-        } 
+          }
+        }
       },
       orderBy: { startTime: 'asc' }
     }),
+    // 바이어의 모든 확정/거절 미팅
     db.meeting.findMany({
-      where: { 
+      where: {
         status: { in: ["ACCEPTED", "CONFIRMED", "REJECTED", "CANCELLED"] },
         ...(user.isMaster ? {
           buyer: { companyName: user.companyName }
         } : {
           OR: [
             { picId: buyerId },
-            { timeSlot: { buyerId: buyerId } }
+            { timeSlot: { buyerId: buyerId } },
+            { buyerId: buyerId }
           ]
         })
       },
-      include: { 
-        seller: { include: { onePager: true } }, 
+      include: {
+        seller: { include: { onePager: true } },
         timeSlot: true,
-        pic: true 
+        pic: true
       },
       orderBy: { timeSlot: { startTime: 'asc' } }
     }),
+    // 바이어에게 온 다이렉트 요청 (셀러가 보낸 것)
     db.meeting.findMany({
       where: {
         buyerId: masterId,
@@ -82,29 +88,45 @@ export default async function BuyerPage() {
       },
       orderBy: { createdAt: 'desc' }
     }),
+    // 셀러 디렉토리
     db.user.findMany({
       where: { role: "SELLER", approvalStatus: "APPROVED" },
       include: { onePager: true },
       orderBy: { companyName: 'asc' }
     }),
+    // 팀원 목록
     user.isMaster ? db.user.findMany({
       where: { companyName: user.companyName, id: { not: buyerId }, role: "BUYER" }
-    }) : Promise.resolve([])
+    }) : Promise.resolve([]),
+    // 셀러가 개설한 슬롯 (바이어가 신청 가능)
+    db.timeSlot.findMany({
+      where: {
+        slotOwner: "SELLER",
+        status: "OPEN",
+        startTime: { gt: now },
+        NOT: { meetings: { some: { buyerId } } }
+      },
+      include: {
+        seller: { include: { onePager: true } },
+        meetings: { include: { buyer: true } }
+      },
+      orderBy: { startTime: 'asc' }
+    }),
   ]);
 
-  // ✅ 데이터 가공 및 분류 (메모리 내 처리로 DB 부하 감소)
+  // ✅ 데이터 가공 및 분류
   const confirmedMeetings = allMeetingsRaw.filter(m => ["ACCEPTED", "CONFIRMED"].includes(m.status));
   const rejectedMeetings = allMeetingsRaw.filter(m => ["REJECTED", "CANCELLED"].includes(m.status));
-  
+
   const pendingMembers = teamMembersRaw.filter(m => m.approvalStatus === "PENDING");
   const approvedMembers = teamMembersRaw.filter(m => m.approvalStatus === "APPROVED");
   const rejectedTeamMembers = teamMembersRaw.filter(m => m.approvalStatus === "REJECTED");
 
   // ✅ [N+1 문제 해결] 각 제안의 셀러 회사 멤버들을 하나의 쿼리로 일괄 조회
   const sellerCompanyNames = Array.from(new Set(directRequestsRaw.map(req => req.seller.companyName)));
-  
+
   const allSellerMembers = sellerCompanyNames.length > 0 ? await db.user.findMany({
-    where: { 
+    where: {
       companyName: { in: sellerCompanyNames },
       approvalStatus: "APPROVED",
       role: "SELLER"
@@ -112,7 +134,7 @@ export default async function BuyerPage() {
     include: { onePager: true }
   }) : [];
 
-  // ✅ 제안 정보와 멤버 정보 매핑 (메모리 내 처리)
+  // ✅ 제안 정보와 멤버 정보 매핑
   const directRequests = directRequestsRaw.map((req) => {
     const companyMembers = allSellerMembers.filter(m => m.companyName === req.seller.companyName);
     return {
@@ -122,10 +144,10 @@ export default async function BuyerPage() {
   });
 
   return (
-    <BuyerClient 
-      user={user} 
-      mySlots={mySlots} 
-      confirmedMeetings={confirmedMeetings} 
+    <BuyerClient
+      user={user}
+      mySlots={mySlots}
+      confirmedMeetings={confirmedMeetings}
       directRequests={directRequests}
       rejectedMeetings={rejectedMeetings}
       allSellers={allSellers}
@@ -133,6 +155,7 @@ export default async function BuyerPage() {
       pendingMembers={pendingMembers}
       approvedMembers={approvedMembers}
       rejectedTeamMembers={rejectedTeamMembers}
+      availableSellerSlots={availableSellerSlots}
     />
   );
 }

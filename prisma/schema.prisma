@@ -30,7 +30,8 @@ model User {
   userType          String?
   userTypeDetail    String?
   preferredPartners String?
-  timeSlots         TimeSlot[]
+  timeSlots         TimeSlot[]  @relation("BuyerTimeSlots")
+  timeSlotsAsSeller TimeSlot[]  @relation("SellerTimeSlots")
   meetingsAsBuyer   Meeting[]  @relation("BuyerMeetings")
   meetingsAsSeller  Meeting[]  @relation("SellerMeetings")
   sentMessages      Message[]  @relation("SentMessages")
@@ -56,8 +57,11 @@ model TimeSlot {
   description String?
   location    String?
   status      String    @default("OPEN")
-  buyer       User      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  buyerId     Int
+  slotOwner   String    @default("BUYER") // "BUYER" | "SELLER"
+  buyer       User?     @relation("BuyerTimeSlots", fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId     Int?
+  seller      User?     @relation("SellerTimeSlots", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId    Int?
   meetings    Meeting[]
 }
 

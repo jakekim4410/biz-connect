@@ -8,7 +8,9 @@ export default function LogoutButton() {
 
   return (
     <button
-      onClick={() => signOut({ callbackUrl: "/" })}
+      onClick={async () => {
+        await signOut({ callbackUrl: "/" });
+      }}
       className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
     >
       <LogOut size={16} />

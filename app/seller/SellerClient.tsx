@@ -4,13 +4,20 @@ import { useI18n, industryOptions, regionOptions } from "@/lib/i18n";
 import { isCompanyMatch } from "@/lib/matchUtils";
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   applyMeetingAction,
   handleMemberStatus,
   transferMasterRole,
   reRequestApprovalAction,
   checkExistingCompanyAction,
-  checkExistingBusinessNumberAction
+  checkExistingBusinessNumberAction,
+  createSellerSlotAction,
+  updateSellerSlotAction,
+  deleteSellerSlotAction,
+  handleSellerSlotStatusAction,
+  acceptDirectMeetingAsSellerAction,
+  rejectDirectMeetingAsSellerAction,
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import { respondLocationChange } from "../buyer/actions";
@@ -21,7 +28,7 @@ import {
   Trophy, ArrowRight, AlertTriangle, TrendingUp, Target,
   XCircle, Calendar, Info, CheckCircle2, Globe, MessageCircle,
   ChevronDown, ChevronUp, UserCheck, Crown, Link as LinkIcon, Lock, RefreshCw,
-  Table, LayoutGrid, LayoutList
+  Table, LayoutGrid, LayoutList, Plus, Edit2, Trash2, MapPinned, Video, Rocket
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import MeetingChat from "@/components/MeetingChat";
@@ -641,10 +648,14 @@ export default function SellerClient({
   hasOnePager,
   pendingMembers = [],
   approvedMembers = [],
-  rejectedTeamMembers = []
+  rejectedTeamMembers = [],
+  mySellerSlots = [],
+  allBuyers = [],
+  sellerDirectRequests = [],
 }: any) {
   const { t, locale } = useI18n();
   const isEn = locale === "en";
+  const router = useRouter();
 
   const [isPending, setIsPending] = useState(false);
   const [processingMemberId, setProcessingMemberId] = useState<number | null>(null);
@@ -708,6 +719,35 @@ export default function SellerClient({
   };
 
   const [groupedView, setGroupedView] = useState(true);
+
+  // ── 셀러 슬롯 관리 state ──
+  const TBA_VALUE = "__TBA__";
+  const normalizeUrl = (url: string) => {
+    if (!url || !url.trim()) return url;
+    const trimmed = url.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  };
+  const [sellerSlotFilter, setSellerSlotFilter] = useState<'PENDING' | 'MATCHED' | 'EXPIRED' | 'ALL'>('PENDING');
+  const [editingSellerSlot, setEditingSellerSlot] = useState<any>(null);
+  const [reviewingSellerMeeting, setReviewingSellerMeeting] = useState<{ slot: any; meeting: any } | null>(null);
+  const [createSellerMeetingType, setCreateSellerMeetingType] = useState<'offline' | 'online'>('offline');
+  const [createSellerLocationValue, setCreateSellerLocationValue] = useState("");
+  const [createSellerLinkTba, setCreateSellerLinkTba] = useState(false);
+  const [createSellerNote, setCreateSellerNote] = useState("");
+  const [editSellerMeetingType, setEditSellerMeetingType] = useState<'offline' | 'online'>('offline');
+  const [editSellerLocationValue, setEditSellerLocationValue] = useState("");
+  const [editSellerLinkTba, setEditSellerLinkTba] = useState(false);
+  const [editSellerNote, setEditSellerNote] = useState("");
+  // 셀러가 받은 다이렉트 제안 수락 모달
+  const [acceptSellerMappingSlotId, setAcceptSellerMappingSlotId] = useState<string>("");
+  // 제안 수락 시 즉석 슬롯 생성용
+  const [isCreatingNewSlotForAccept, setIsCreatingNewSlotForAccept] = useState(false);
+  const [newSlotAcceptDate, setNewSlotAcceptDate] = useState("");
+  const [newSlotAcceptHour, setNewSlotAcceptHour] = useState("09");
+  const [newSlotAcceptMinute, setNewSlotAcceptMinute] = useState("00");
+  const [newSlotAcceptLocation, setNewSlotAcceptLocation] = useState("");
+  // 바이어 탐색 state
 
   const [editSelectedType, setEditSelectedType] = useState(
     ["VC", "AC", "바이어", "스타트업", "기타"].includes(user?.userType)
@@ -1047,6 +1087,35 @@ export default function SellerClient({
   const myDisplayName = (isEn && user?.nameEn) ? user.nameEn : (user?.name || "");
   const myDisplayJobTitle = (isEn && user?.jobTitleEn) ? user.jobTitleEn : (user?.jobTitle || "");
 
+  // editingSellerSlot 열릴 때 초기화
+  useEffect(() => {
+    if (!editingSellerSlot) return;
+    const loc = editingSellerSlot.location || "";
+    const isTba = loc === TBA_VALUE;
+    const isOnline = isTba || /^https?:\/\//i.test(loc) || loc.includes("zoom") || loc.includes("meet.") || loc.includes("teams");
+    setEditSellerMeetingType(isOnline ? 'online' : 'offline');
+    setEditSellerLinkTba(isTba);
+    setEditSellerLocationValue(isTba ? "" : loc);
+    setEditSellerNote(editingSellerSlot.note || "");
+  }, [editingSellerSlot]);
+
+  // 필터된 셀러 슬롯
+  const filteredSellerSlots = useMemo(() => {
+    if (!mySellerSlots) return [];
+    return sellerSlotFilter === 'ALL' ? mySellerSlots :
+      sellerSlotFilter === 'PENDING' ? mySellerSlots.filter((s: any) => s.status === 'OPEN' && new Date(s.startTime) > new Date()) :
+      sellerSlotFilter === 'MATCHED' ? mySellerSlots.filter((s: any) => s.status === 'CLOSED') :
+      sellerSlotFilter === 'EXPIRED' ? mySellerSlots.filter((s: any) => s.status === 'OPEN' && new Date(s.startTime) <= new Date()) :
+      mySellerSlots;
+  }, [sellerSlotFilter, mySellerSlots]);
+
+  // 셀러 슬롯의 총 대기중인 신청 수
+  const totalSellerPendingRequests = useMemo(() => {
+    return mySellerSlots?.reduce((acc: number, slot: any) => {
+      return acc + slot.meetings.filter((m: any) => m.status === 'PENDING').length;
+    }, 0) || 0;
+  }, [mySellerSlots]);
+
   if (!mounted) return null;
   if (!user) return <div className="p-10 text-center font-bold">{isEn ? "Loading user info..." : "사용자 정보를 불러오는 중입니다..."}</div>;
 
@@ -1178,6 +1247,184 @@ export default function SellerClient({
     rejected: Math.max(0, rejectedMeetings.length - seenCounts.rejected),
   };
 
+
+  // 셀러 슬롯 생성
+  const onCreateSellerSlot = async (formData: FormData) => {
+    const date = formData.get("date") as string;
+    const hour = formData.get("hour") as string;
+    const minute = formData.get("minute") as string;
+    const selectedDateTime = new Date(`${date}T${hour}:${minute}:00`);
+    if (selectedDateTime < new Date()) {
+      alert(isEn ? "🚨 You cannot create slots in the past." : "🚨 과거 시간으로는 슬롯을 생성할 수 없습니다.");
+      return;
+    }
+    if (createSellerMeetingType === 'online') {
+      if (createSellerLinkTba) {
+        formData.set("location", TBA_VALUE);
+      } else {
+        const rawLocation = formData.get("location") as string;
+        formData.set("location", normalizeUrl(rawLocation));
+      }
+    }
+    if (!confirm(isEn ? "Create new slot at the selected time?" : "선택한 시간에 새로운 상담 슬롯을 생성하시겠습니까?")) return;
+    setIsPending(true);
+    try {
+      const result = await createSellerSlotAction(formData, sellerId);
+      if (!result?.success) {
+        alert(`🚨 ${result?.error || (isEn ? "Failed to create slot." : "슬롯 생성에 실패했습니다.")}`);
+        return;
+      }
+      setExpandedSection('my-slots');
+      setCreateSellerMeetingType('offline');
+      setCreateSellerLocationValue("");
+      setCreateSellerLinkTba(false);
+      setCreateSellerNote("");
+      alert(isEn ? "New slot created successfully." : "신규 슬롯이 생성되었습니다.");
+      router.refresh();
+    } finally { setIsPending(false); }
+  };
+
+  // 셀러 슬롯 수정
+  const handleUpdateSellerSlot = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const date = formData.get("date") as string;
+    const hour = formData.get("hour") as string;
+    const minute = formData.get("minute") as string;
+    const selectedDateTime = new Date(`${date}T${hour}:${minute}:00`);
+    if (selectedDateTime < new Date()) {
+      alert(isEn ? "🚨 Cannot update to past time." : "🚨 과거 시간으로 수정할 수 없습니다.");
+      return;
+    }
+    if (editSellerMeetingType === 'online') {
+      if (editSellerLinkTba) {
+        formData.set("location", TBA_VALUE);
+      } else {
+        const rawLocation = formData.get("location") as string;
+        formData.set("location", normalizeUrl(rawLocation));
+      }
+    }
+    if (!confirm(isEn ? "Update this slot?" : "해당 슬롯을 수정하시겠습니까?")) return;
+    setIsPending(true);
+    try {
+      const result = await updateSellerSlotAction(editingSellerSlot.id, formData);
+      if (!result?.success) {
+        alert(`🚨 ${result?.error || (isEn ? "Failed." : "수정에 실패했습니다.")}`);
+        return;
+      }
+      setEditingSellerSlot(null);
+      alert(isEn ? "Updated successfully." : "슬롯이 수정되었습니다.");
+      router.refresh();
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
+  // 셀러 슬롯 삭제
+  const handleDeleteSellerSlot = async (slotId: number) => {
+    if (!confirm(isEn ? "Cancel this slot? Pending requests will be auto-rejected." : "🚨 이 슬롯을 취소하시겠습니까?\n대기 중인 신청이 있다면 모두 자동 거절됩니다.")) return;
+    setIsPending(true);
+    try {
+      await deleteSellerSlotAction(slotId, locale);
+      alert(isEn ? "Slot cancelled." : "슬롯이 취소되었습니다.");
+      router.refresh();
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
+  // 셀러가 바이어 신청 승인
+  const handleApproveSellerMatch = async (slot: any, meeting: any) => {
+    if (!confirm(isEn
+      ? `Confirm meeting with ${meeting.buyer.companyName}?`
+      : `${meeting.buyer.companyName} 기업과 미팅을 최종 확정하시겠습니까?`
+    )) return;
+    setIsPending(true);
+    try {
+      await handleSellerSlotStatusAction(Number(meeting.id), Number(slot.id), 'ACCEPT', '', locale);
+      setReviewingSellerMeeting(null);
+      router.refresh();
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
+  // 셀러가 바이어 신청 거절
+  const handleRejectSellerMatch = async (meeting: any) => {
+    const defaultReason = isEn ? "Currently not aligned with our direction." : "현재 당사의 방향성과 맞지 않아 부득이하게 거절하게 되었습니다.";
+    const userReason = prompt(isEn ? "Please enter a rejection reason." : "거절 사유를 입력해주세요.", defaultReason);
+    if (userReason === null) return;
+    setIsPending(true);
+    try {
+      const slotId = reviewingSellerMeeting?.slot?.id;
+      await handleSellerSlotStatusAction(Number(meeting.id), Number(slotId), 'REJECT', userReason, locale);
+      setReviewingSellerMeeting(null);
+      router.refresh();
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
+  // 셀러가 받은 다이렉트 제안 수락 (슬롯 매핑)
+  const handleConfirmSellerDirectMapping = async () => {
+    if (!acceptingSellerDirect) return;
+    
+    // 신규 생성 모드가 아닌데 슬롯 선택도 안 된 경우
+    if (!isCreatingNewSlotForAccept && !acceptSellerMappingSlotId) {
+      alert(isEn ? "Please select a time slot." : "수락할 미팅 슬롯을 선택해주세요.");
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      let res;
+      if (isCreatingNewSlotForAccept) {
+        // 즉석 슬롯 생성 및 매핑
+        if (!newSlotAcceptDate || !newSlotAcceptLocation) {
+          alert(isEn ? "Please fill in all fields." : "날짜와 장소를 모두 입력해주세요.");
+          setIsPending(false);
+          return;
+        }
+        const startTime = new Date(`${newSlotAcceptDate}T${newSlotAcceptHour}:${newSlotAcceptMinute}:00`);
+        const endTime = new Date(startTime.getTime() + 30 * 60000); // 기본 30분
+        
+        res = await acceptDirectMeetingWithNewSlotAction(
+          acceptingSellerDirect.id,
+          {
+            startTime,
+            endTime,
+            location: newSlotAcceptLocation,
+          },
+          locale
+        );
+      } else {
+        // 기존 슬롯에 매핑
+        const targetSlotId = parseInt(acceptSellerMappingSlotId, 10);
+        res = await acceptDirectMeetingAsSellerAction(acceptingSellerDirect.id, targetSlotId, locale);
+      }
+
+      if (res?.error) {
+        alert(res.error);
+      } else {
+        alert(isEn ? "Direct meeting accepted and scheduled." : "다이렉트 미팅이 수락 및 확정되었습니다.");
+        setAcceptingSellerDirect(null);
+        setAcceptSellerMappingSlotId("");
+        setIsCreatingNewSlotForAccept(false);
+        router.refresh();
+      }
+    } catch (e) { 
+      console.error(e);
+      alert("Error."); 
+    } finally { 
+      setIsPending(false); 
+    }
+  };
+
+  // 셀러가 받은 다이렉트 제안 거절
+  const handleRejectSellerDirect = async (req: any) => {
+    const defaultReason = isEn ? "Currently not aligned with our direction." : "현재 당사의 방향성과 맞지 않아 부득이하게 거절하게 되었습니다.";
+    const userReason = prompt(isEn ? "Please enter a rejection reason." : "거절 사유를 입력해주세요.", defaultReason);
+    if (userReason === null) return;
+    setIsPending(true);
+    try {
+      await rejectDirectMeetingAsSellerAction(Number(req.id), userReason, locale);
+      alert(isEn ? "Proposal rejected." : "제안이 거절되었습니다.");
+      router.refresh();
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
   const navItems: any[] = [
     {
       id: 'available', icon: <Search size={22} />, label: t.seller.nav.available, sub: 'SEARCH',
@@ -1201,6 +1448,32 @@ export default function SellerClient({
     },
   ];
 
+  // 새 탭: 내 슬롯 관리, 받은 제안, 슬롯 생성
+  navItems.push({
+    id: 'my-slots',
+    icon: <Calendar size={22} />,
+    label: t.seller.nav.mySlots,
+    sub: 'MY-SLOTS',
+    count: totalSellerPendingRequests > 0 ? totalSellerPendingRequests : (mySellerSlots.length > 0 ? mySellerSlots.length : null),
+    alertCount: totalSellerPendingRequests > 0 ? String(totalSellerPendingRequests) : null,
+  });
+  navItems.push({
+    id: 'received-requests',
+    icon: <Sparkles size={22} />,
+    label: t.seller.nav.receivedRequests,
+    sub: 'RECEIVED',
+    count: sellerDirectRequests.length > 0 ? sellerDirectRequests.length : null,
+    alertCount: sellerDirectRequests.length > 0 ? String(sellerDirectRequests.length) : null,
+  });
+  navItems.push({
+    id: 'slot-generator',
+    icon: <Plus size={22} />,
+    label: t.seller.nav.slotGenerator,
+    sub: 'CREATE',
+    count: null,
+    alertCount: null,
+  });
+
   if (user.isMaster) {
     navItems.push({
       id: 'team', icon: <ShieldCheck size={22} />, label: t.seller.nav.team, sub: 'TEAM',
@@ -1210,6 +1483,7 @@ export default function SellerClient({
   }
 
   navItems.push({ id: 'profile', icon: <UserIcon size={22} />, label: t.seller.nav.profile, sub: 'PROFILE', count: null });
+
 
   const buyerMasterUser = buyerMembers.find((m: any) => m.isMaster);
 
@@ -2738,9 +3012,6 @@ export default function SellerClient({
             </section>
           )}
 
-        </main>{/* ← </main> 정상 닫힘 */}
-      </div>{/* ← relative z-10 wrapper 정상 닫힘 */}
-
       {/* ── 미팅 신청 모달 (PIC 선택 포함) ── */}
       {applyingSlot && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in zoom-in-95">
@@ -2937,6 +3208,504 @@ export default function SellerClient({
           </div>
         </div>
       )}
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* ─── 내 슬롯 관리 탭 ─── */}
+      {expandedSection === 'my-slots' && (
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+            {/* 헤더 */}
+            <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                  <Calendar className="text-emerald-500" size={22} />
+                  {t.seller.slotManagement.title}
+                </h2>
+                <p className="text-sm text-slate-400 font-bold mt-1">{t.seller.slotManagement.subtitle}</p>
+              </div>
+              <div className="flex gap-2 flex-wrap shrink-0">
+                {(['PENDING', 'MATCHED', 'EXPIRED', 'ALL'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setSellerSlotFilter(f)}
+                    className={`px-4 py-2 rounded-[14px] text-[11px] font-black transition-all ${sellerSlotFilter === f ? 'bg-slate-900 text-white shadow' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                  >
+                    {(t.seller.slotManagement as any)[`${f.toLowerCase()}Filter`] || f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 슬롯 목록 */}
+            <div className="p-4 md:p-6 space-y-4">
+              {filteredSellerSlots.length === 0 ? (
+                <div className="text-center py-16">
+                  <Calendar className="mx-auto text-slate-300 mb-4" size={40} />
+                  <p className="text-slate-500 font-black">{t.seller.slotManagement.noSlots}</p>
+                  <p className="text-slate-400 text-sm mt-1">{t.seller.slotManagement.noSlotsDesc}</p>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSection('slot-generator')}
+                    className="mt-4 px-6 py-2 bg-emerald-600 text-white rounded-2xl text-sm font-black hover:bg-emerald-700 transition-colors flex items-center gap-2 mx-auto"
+                  >
+                    <Plus size={16} /> {isEn ? "Create Slot" : "슬롯 생성하기"}
+                  </button>
+                </div>
+              ) : (
+                filteredSellerSlots.map((slot: any) => {
+                  const pendingCount = slot.meetings.filter((m: any) => m.status === 'PENDING').length;
+                  const slotDate = new Date(slot.startTime);
+                  const isPast = slotDate < new Date();
+                  return (
+                    <div key={slot.id} className={`border rounded-[20px] overflow-hidden transition-all ${slot.status === 'CLOSED' ? 'border-emerald-200 bg-emerald-50/30' : isPast ? 'border-slate-200 bg-slate-50/50 opacity-70' : 'border-slate-100 bg-white hover:border-emerald-200 hover:shadow-md'}`}>
+                      <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${slot.status === 'CLOSED' ? 'bg-emerald-100 text-emerald-600' : isPast ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-600'}`}>
+                            <Calendar size={22} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-black text-base text-slate-800">{formatDateWithDay(slot.startTime)}</p>
+                              {slot.status === 'CLOSED' && <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-md">{isEn ? "MATCHED" : "매칭완료"}</span>}
+                              {isPast && slot.status !== 'CLOSED' && <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{isEn ? "EXPIRED" : "만료됨"}</span>}
+                              {pendingCount > 0 && <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">{isEn ? `${pendingCount} Pending` : `${pendingCount}건 대기중`}</span>}
+                            </div>
+                            <p className="text-sm text-slate-400 font-bold mt-0.5">{formatTime24And12(slot.startTime)}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <MapPin size={11} className="text-rose-400 shrink-0" />
+                              <span className="text-[11px] font-bold text-slate-400 truncate">{slot.location || (isEn ? "TBD" : "장소 미정")}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                          {pendingCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setReviewingSellerMeeting({ slot, meeting: slot.meetings.find((m: any) => m.status === 'PENDING') })}
+                              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[11px] font-black hover:bg-amber-600 transition-colors flex items-center gap-1.5"
+                            >
+                              <UserCheck size={13} />{t.seller.slotManagement.reviewBtn}
+                            </button>
+                          )}
+                          {slot.status !== 'CLOSED' && !isPast && (
+                            <>
+                              <button type="button" onClick={() => setEditingSellerSlot(slot)} className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                                <Edit2 size={15} />
+                              </button>
+                              <button type="button" onClick={() => handleDeleteSellerSlot(slot.id)} className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-colors">
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* 신청 목록 */}
+                      {slot.meetings.length > 0 && (
+                        <div className="border-t border-slate-100 bg-slate-50/50 p-4 space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Applications" : "신청 목록"}</p>
+                          {slot.meetings.map((m: any) => (
+                            <div key={m.id} className="bg-white rounded-[14px] border border-slate-100 p-3 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-sm shrink-0">
+                                  {(m.buyer?.companyName || "B").charAt(0)}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-black text-sm text-slate-800 truncate">{m.buyer?.companyName}</p>
+                                  <p className="text-[11px] text-slate-400 font-bold truncate">{m.buyer?.name}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {m.status === 'PENDING' && (
+                                  <>
+                                    <button type="button" onClick={() => setReviewingSellerMeeting({ slot, meeting: m })} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-black hover:bg-blue-600 transition-colors">{t.seller.slotManagement.reviewBtn}</button>
+                                  </>
+                                )}
+                                {m.status === 'CONFIRMED' && <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">✓ {isEn ? "Confirmed" : "확정"}</span>}
+                                {m.status === 'REJECTED' && <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{isEn ? "Rejected" : "거절됨"}</span>}
+                                {m.id && m.status === 'CONFIRMED' && (
+                                  <button type="button" onClick={() => setSelectedChatMeeting(m)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
+                                    <MessageCircle size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 슬롯 생성 탭 ─── */}
+      {expandedSection === 'slot-generator' && (
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 p-6 md:p-10 max-w-2xl mx-auto">
+            <div className="mb-8 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-[20px] flex items-center justify-center mx-auto mb-4">
+                <Plus size={28} className="text-emerald-600" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-800">{t.seller.slotGenerator.title}</h2>
+              <p className="text-slate-400 font-bold text-sm mt-1">{t.seller.slotGenerator.subtitle}</p>
+            </div>
+            <form action={onCreateSellerSlot} className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-3 space-y-2">
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{t.seller.slotGenerator.dateLabel}</label>
+                  <input type="date" name="date" required min={new Date().toISOString().split('T')[0]} className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{t.seller.slotGenerator.hourLabel}</label>
+                  <select name="hour" className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all">
+                    {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}시</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{t.seller.slotGenerator.minuteLabel}</label>
+                  <select name="minute" className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all">
+                    {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}분</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* 온라인/오프라인 토글 */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">미팅 방식</label>
+                <div className="flex bg-slate-100 p-1 rounded-[16px] shadow-inner w-full">
+                  <button type="button" onClick={() => { setCreateSellerMeetingType('offline'); setCreateSellerLinkTba(false); }} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[12px] text-xs font-black transition-all ${createSellerMeetingType === 'offline' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <MapPinned size={14} className={createSellerMeetingType === 'offline' ? 'text-emerald-500' : ''} />{isEn ? "Offline (In-person)" : "오프라인 (대면)"}
+                  </button>
+                  <button type="button" onClick={() => setCreateSellerMeetingType('online')} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[12px] text-xs font-black transition-all ${createSellerMeetingType === 'online' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <Video size={14} className={createSellerMeetingType === 'online' ? 'text-emerald-500' : ''} />{isEn ? "Online (Video)" : "온라인 (화상)"}
+                  </button>
+                </div>
+              </div>
+
+              {/* 장소 입력 */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{t.seller.slotGenerator.locationLabel}</label>
+                {createSellerMeetingType === 'online' ? (
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={createSellerLinkTba} onChange={e => setCreateSellerLinkTba(e.target.checked)} className="rounded" />
+                      <span className="text-sm font-bold text-slate-600">{isEn ? "Link TBD (announce later)" : "링크 추후 공지 (TBA)"}</span>
+                    </label>
+                    {!createSellerLinkTba && (
+                      <input type="url" name="location" value={createSellerLocationValue} onChange={e => setCreateSellerLocationValue(e.target.value)} placeholder="https://zoom.us/j/..." className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" />
+                    )}
+                  </div>
+                ) : (
+                  <input type="text" name="location" value={createSellerLocationValue} onChange={e => setCreateSellerLocationValue(e.target.value)} placeholder={t.seller.slotGenerator.locationPlaceholder} className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Additional Notes (optional)" : "추가 안내사항 (선택)"}</label>
+                <textarea name="description" value={createSellerNote} onChange={e => setCreateSellerNote(e.target.value)} placeholder={isEn ? "Additional instructions for buyers..." : "바이어에게 전달할 추가 안내 사항을 입력하세요 (선택)"} className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all resize-none h-24" />
+              </div>
+
+              <button type="submit" disabled={isPending} className="w-full py-4 bg-emerald-600 text-white font-black text-base rounded-[20px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                {isPending ? <Clock className="animate-spin" size={20} /> : <Plus size={20} />}
+                {isPending ? t.seller.slotGenerator.creating : t.seller.slotGenerator.submitBtn}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 받은 제안 탭 ─── */}
+      {expandedSection === 'received-requests' && (
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 md:p-8 border-b border-slate-100">
+              <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <Sparkles className="text-violet-500" size={22} />
+                {t.seller.receivedRequests.title}
+              </h2>
+              <p className="text-sm text-slate-400 font-bold mt-1">{isEn ? "Direct meeting proposals from buyers appear here." : "바이어로부터 직접 받은 미팅 제안 목록입니다."}</p>
+            </div>
+            <div className="p-4 md:p-6 space-y-4">
+              {sellerDirectRequests.length === 0 ? (
+                <div className="text-center py-16">
+                  <Sparkles className="mx-auto text-slate-300 mb-4" size={40} />
+                  <p className="text-slate-500 font-black">{t.seller.receivedRequests.noRequests}</p>
+                  <p className="text-slate-400 text-sm mt-1">{t.seller.receivedRequests.noRequestsDesc}</p>
+                </div>
+              ) : (
+                sellerDirectRequests.map((req: any) => (
+                  <div key={req.id} className="bg-white border border-slate-100 rounded-[20px] p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-violet-200 hover:shadow-md transition-all">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 rounded-[14px] bg-violet-100 text-violet-700 flex items-center justify-center font-black text-lg shrink-0">
+                        {(req.buyer?.companyName || "B").charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-black text-base text-slate-800">{req.buyer?.companyName}</p>
+                          <span className="text-[9px] font-black text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-100">DIRECT</span>
+                        </div>
+                        <p className="text-sm text-slate-400 font-bold mt-0.5">{req.buyer?.name} · {req.buyer?.jobTitle}</p>
+                        {req.proposal && <p className="text-sm text-slate-600 font-medium mt-1 line-clamp-2 italic">"{req.proposal}"</p>}
+                        <p className="text-[11px] text-slate-400 mt-1">{new Date(req.createdAt).toLocaleDateString(isEn ? 'en-US' : 'ko-KR')}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => { setAcceptingSellerDirect(req); setAcceptSellerMappingSlotId(""); }}
+                        className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[11px] font-black hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
+                      >
+                        <Check size={13} />{t.seller.receivedRequests.acceptBtn}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectSellerDirect(req)}
+                        className="px-4 py-2.5 bg-slate-100 text-slate-500 rounded-xl text-[11px] font-black hover:bg-rose-50 hover:text-rose-600 transition-colors flex items-center gap-1.5"
+                      >
+                        <XIcon size={13} />{t.seller.receivedRequests.rejectBtn}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+        </main>{/* ← </main> 정상 닫힘 */}
+      </div>{/* ← relative z-10 wrapper 정상 닫힘 */}
+
+      {/* ─── 셀러 슬롯 신청 검토 모달 ─── */}
+      {reviewingSellerMeeting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setReviewingSellerMeeting(null)} />
+          <div className="bg-white rounded-[32px] shadow-2xl relative w-full max-w-lg z-10 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-800">{t.seller.slotManagement.reviewModalTitle}</h3>
+              <button onClick={() => setReviewingSellerMeeting(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><XIcon size={20} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* 슬롯 정보 */}
+              <div className="bg-slate-50 rounded-[20px] p-4 space-y-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Slot Info" : "슬롯 정보"}</p>
+                <p className="font-black text-slate-700">{formatDateWithDay(reviewingSellerMeeting.slot.startTime)}</p>
+                <p className="text-sm text-slate-500 font-bold">{formatTime24And12(reviewingSellerMeeting.slot.startTime)}</p>
+                {reviewingSellerMeeting.slot.location && (
+                  <div className="flex items-center gap-1 text-sm text-slate-500">
+                    <MapPin size={12} /> {reviewingSellerMeeting.slot.location}
+                  </div>
+                )}
+              </div>
+              {/* 신청자 정보 */}
+              <div className="bg-blue-50 rounded-[20px] p-4 space-y-2">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{isEn ? "Applicant" : "신청 바이어"}</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0">
+                    {(reviewingSellerMeeting.meeting.buyer?.companyName || "B").charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-black text-base text-slate-800">{reviewingSellerMeeting.meeting.buyer?.companyName}</p>
+                    <p className="text-sm text-slate-500 font-bold">{reviewingSellerMeeting.meeting.buyer?.name} · {reviewingSellerMeeting.meeting.buyer?.jobTitle}</p>
+                  </div>
+                </div>
+                {reviewingSellerMeeting.meeting.proposal && (
+                  <div className="mt-2 bg-white/70 rounded-xl p-3">
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">{isEn ? "Proposal" : "제안 내용"}</p>
+                    <p className="text-sm text-slate-700 font-medium italic">"{reviewingSellerMeeting.meeting.proposal}"</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => handleApproveSellerMatch(reviewingSellerMeeting.slot, reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  <Check size={16} />{t.seller.slotManagement.acceptBtn}
+                </button>
+                <button type="button" onClick={() => handleRejectSellerMatch(reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-[18px] font-black text-sm hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  <XIcon size={16} />{t.seller.slotManagement.rejectBtn}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 셀러 슬롯 수정 모달 ─── */}
+      {editingSellerSlot && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setEditingSellerSlot(null)} />
+          <div className="bg-white rounded-[32px] shadow-2xl relative w-full max-w-lg z-10 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-800">{isEn ? "Edit Slot" : "슬롯 수정"}</h3>
+              <button onClick={() => setEditingSellerSlot(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><XIcon size={20} /></button>
+            </div>
+            <form onSubmit={handleUpdateSellerSlot} className="p-6 space-y-5">
+              {(() => {
+                const hasMatch = editingSellerSlot.meetings?.some((m: any) => m.status === 'ACCEPTED' || m.status === 'CONFIRMED');
+                return (
+                  <>
+                    {hasMatch && (
+                      <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl text-[11px] text-amber-700 flex gap-2 items-start leading-relaxed animate-in fade-in">
+                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                        <p>{isEn ? "Date and time cannot be changed for confirmed meetings." : "확정된 미팅이 있어 시간과 날짜는 수정할 수 없습니다."}</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="col-span-3 space-y-2">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Date" : "날짜"}</label>
+                        <input type="date" name="date" required readOnly={hasMatch} defaultValue={new Date(editingSellerSlot.startTime).toISOString().split('T')[0]} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Hour" : "시간"}</label>
+                        <select name="hour" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getHours()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
+                          {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}시</option>)}
+                        </select>
+                        {hasMatch && <input type="hidden" name="hour" defaultValue={String(new Date(editingSellerSlot.startTime).getHours()).padStart(2, '0')} />}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Min" : "분"}</label>
+                        <select name="minute" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getMinutes()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
+                          {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}분</option>)}
+                        </select>
+                        {hasMatch && <input type="hidden" name="minute" defaultValue={String(new Date(editingSellerSlot.startTime).getMinutes()).padStart(2, '0')} />}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Location" : "장소"}</label>
+                <input type="text" name="location" defaultValue={editingSellerSlot.location || ""} placeholder={isEn ? "Location or meeting link" : "장소 또는 온라인 링크"} className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Notes" : "추가 안내"}</label>
+                <textarea name="description" defaultValue={editingSellerSlot.description || ""} className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all resize-none h-20" />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setEditingSellerSlot(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-[18px] font-black text-sm hover:bg-slate-200 transition-colors">{isEn ? "Cancel" : "취소"}</button>
+                <button type="submit" disabled={isPending} className="flex-1 py-3 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {isPending ? <Clock className="animate-spin" size={16} /> : <Check size={16} />}{isEn ? "Save" : "저장"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 셀러가 받은 다이렉트 제안 수락 모달 (슬롯 선택) ─── */}
+      {acceptingSellerDirect && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setAcceptingSellerDirect(null)} />
+          <div className="bg-white rounded-[32px] shadow-2xl relative w-full max-w-lg z-10 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-800">{isEn ? "Accept Proposal" : "제안 수락"}</h3>
+              <button onClick={() => setAcceptingSellerDirect(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><XIcon size={20} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="bg-violet-50 rounded-[20px] p-4">
+                <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-2">{isEn ? "Proposal from" : "제안 바이어"}</p>
+                <p className="font-black text-slate-800">{acceptingSellerDirect.buyer?.companyName}</p>
+                <p className="text-sm text-slate-500 font-bold">{acceptingSellerDirect.buyer?.name}</p>
+                {acceptingSellerDirect.proposal && <p className="text-sm text-slate-600 mt-2 italic">"{acceptingSellerDirect.proposal}"</p>}
+              </div>
+              <div className="space-y-4">
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCreatingNewSlotForAccept(false)}
+                    className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${!isCreatingNewSlotForAccept ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    {isEn ? "Select Existing" : "기존 슬롯 선택"}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsCreatingNewSlotForAccept(true)}
+                    className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${isCreatingNewSlotForAccept ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    {isEn ? "Create New" : "새 슬롯 생성"}
+                  </button>
+                </div>
+
+                {!isCreatingNewSlotForAccept ? (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{t.seller.receivedRequests.selectSlot}</label>
+                    {mySellerSlots.filter((s: any) => s.status === 'OPEN' && new Date(s.startTime) > new Date()).length === 0 ? (
+                      <div className="bg-amber-50 rounded-[16px] p-4 text-center border border-amber-100">
+                        <p className="text-xs font-bold text-amber-700">{t.seller.receivedRequests.noSlotAvailable}</p>
+                      </div>
+                    ) : (
+                      <select 
+                        value={acceptSellerMappingSlotId} 
+                        onChange={e => setAcceptSellerMappingSlotId(e.target.value)} 
+                        className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all"
+                      >
+                        <option value="">{isEn ? "-- Select a slot --" : "-- 슬롯 선택 --"}</option>
+                        {mySellerSlots.filter((s: any) => s.status === 'OPEN' && new Date(s.startTime) > new Date()).map((s: any) => (
+                          <option key={s.id} value={s.id}>{formatDateWithDay(s.startTime)} {formatTime24And12(s.startTime)}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? "Date" : "날짜"}</label>
+                      <input 
+                        type="date" 
+                        value={newSlotAcceptDate} 
+                        onChange={e => setNewSlotAcceptDate(e.target.value)} 
+                        className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? "Hour" : "시간"}</label>
+                        <select 
+                          value={newSlotAcceptHour} 
+                          onChange={e => setNewSlotAcceptHour(e.target.value)} 
+                          className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}시</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? "Minute" : "분"}</label>
+                        <select 
+                          value={newSlotAcceptMinute} 
+                          onChange={e => setNewSlotAcceptMinute(e.target.value)} 
+                          className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all"
+                        >
+                          {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}분</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">{isEn ? "Location" : "장소"}</label>
+                      <input 
+                        type="text" 
+                        value={newSlotAcceptLocation} 
+                        onChange={e => setNewSlotAcceptLocation(e.target.value)} 
+                        placeholder={isEn ? "Meeting place or link" : "미팅 장소 또는 온라인 링크"}
+                        className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none font-bold text-sm transition-all" 
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setAcceptingSellerDirect(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-[18px] font-black text-sm hover:bg-slate-200 transition-colors">{isEn ? "Cancel" : "취소"}</button>
+                <button type="button" onClick={handleConfirmSellerDirectMapping} disabled={isPending || !acceptSellerMappingSlotId} className="flex-1 py-3 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {isPending ? <Clock className="animate-spin" size={16} /> : <Check size={16} />}{t.seller.receivedRequests.confirmMapping}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* 스크롤바 CSS */}
       <style dangerouslySetInnerHTML={{

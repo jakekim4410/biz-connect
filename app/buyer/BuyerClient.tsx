@@ -13,7 +13,9 @@ import {
   handleMemberStatus,
   transferMasterRole,
   acceptDirectMeetingAction,
-  rejectDirectMeetingAction
+  rejectDirectMeetingAction,
+  applyToSellerSlotAction,
+  sendDirectMeetingToSellerAction
 } from "./actions";
 import { updateProfileAction } from "../profile/action";
 import {
@@ -60,6 +62,7 @@ export default function BuyerClient({
   pendingMembers = [],
   approvedMembers = [],
   rejectedTeamMembers = [],
+  availableSellerSlots = [],
 }: any) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -122,6 +125,12 @@ export default function BuyerClient({
   const [acceptingDirect, setAcceptingDirect] = useState<any>(null);
   const [acceptMappingSlotId, setAcceptMappingSlotId] = useState<string>("");
   const [selectedChatMeeting, setSelectedChatMeeting] = useState<any>(null);
+
+  // 셀러 슬롯 탐색 및 신청 state
+  const [sellerSlotFilter, setSellerSlotFilter] = useState<'ALL' | 'AVAILABLE'>('AVAILABLE');
+  const [applyingToSellerSlot, setApplyingToSellerSlot] = useState<any>(null);
+  const [applyingToDirectSeller, setApplyingToDirectSeller] = useState<any>(null);
+  const [sellerProposal, setSellerProposal] = useState("");
 
   // ── 슬롯 수정: 온라인/오프라인 선택 state ──
   const [editMeetingType, setEditMeetingType] = useState<'offline' | 'online'>('offline');
@@ -674,6 +683,51 @@ export default function BuyerClient({
     }
   };
 
+  // 바이어가 셀러 슬롯에 신청
+  const handleApplyToSellerSlot = async () => {
+    if (!applyingToSellerSlot) return;
+    if (!confirm(isEn ? "Apply to this slot?" : "해당 시간에 미팅을 신청하시겠습니까?")) return;
+    setIsPending(true);
+    try {
+      const formData = new FormData();
+      formData.set("slotId", String(applyingToSellerSlot.id));
+      formData.set("sellerId", String(applyingToSellerSlot.sellerId));
+      formData.set("proposal", sellerProposal);
+      const res = await applyToSellerSlotAction(formData, buyerId);
+      if (res?.error) {
+        alert(res.error);
+      } else {
+        alert(isEn ? "Application submitted." : "미팅 신청이 완료되었습니다.");
+        setApplyingToSellerSlot(null);
+        setSellerProposal("");
+        router.refresh();
+      }
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
+  // 바이어가 셀러에게 다이렉트 제안
+  const handleSendDirectToSeller = async () => {
+    if (!applyingToDirectSeller) return;
+    if (!confirm(isEn ? "Send direct proposal?" : "해당 기업에게 다이렉트 미팅을 제안하시겠습니까?")) return;
+    setIsPending(true);
+    try {
+      const formData = new FormData();
+      formData.set("sellerId", String(applyingToDirectSeller.id));
+      // 슬롯을 명시하지 않으면 actions 안에서 DIRECT_REQUEST로 처리
+      formData.set("slotId", "-1");
+      formData.set("proposal", sellerProposal);
+      const res = await applyToSellerSlotAction(formData, buyerId);
+      if (res?.error) {
+        alert(res.error);
+      } else {
+        alert(isEn ? "Proposal sent." : "미팅 제안이 전송되었습니다.");
+        setApplyingToDirectSeller(null);
+        setSellerProposal("");
+        router.refresh();
+      }
+    } catch { alert("Error."); } finally { setIsPending(false); }
+  };
+
   // ─── 뷰 토글 컴포넌트 ───
   const ViewToggle = ({
     mode,
@@ -788,6 +842,7 @@ export default function BuyerClient({
       alertCount: toAlertCount(buyerUnreadCounts.rejected),
       count: rejectedMeetings.length > 0 ? rejectedMeetings.length : null
     },
+    { id: 'available-seller-slots', label: isEn ? "Seller Slots" : "셀러 오픈 슬롯", sub: 'SLOTS', icon: <Calendar size={22} />, alertCount: null, count: availableSellerSlots.length > 0 ? availableSellerSlots.length : null },
     { id: 'direct', label: isEn ? "Proposals" : "받은 제안", sub: 'DIRECT', icon: <Sparkles size={22} />, alertCount: toAlertCount(buyerUnreadCounts.direct), count: directRequests?.length > 0 ? directRequests.length : null },
     { id: 'generator', label: t.buyer.nav.generator, sub: 'CREATE', icon: <Plus size={22} />, alertCount: null, count: null },
     { id: 'analytics', label: t.buyer.nav.analytics, sub: 'INSIGHT', icon: <BarChart3 size={22} />, alertCount: null, count: null },
@@ -1510,6 +1565,73 @@ export default function BuyerClient({
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── [E] 오픈된 셀러 슬롯 탐색 및 신청 ── */}
+        {expandedSection === 'available-seller-slots' && (
+          <section className="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl md:text-2xl font-black text-slate-800 leading-tight">
+                  {isEn ? "Available Seller Slots" : "오픈된 상주 셀러 슬롯"}
+                </h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-slate-400 font-bold">
+                    {isEn ? "Apply to open meeting times provided by sellers." : "셀러가 개설한 빈 시간에 미팅을 신청하세요."}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[24px] md:rounded-[32px] shadow-lg shadow-slate-100 border border-slate-100 p-4 md:p-6">
+              {availableSellerSlots.length === 0 ? (
+                <div className="py-20 flex flex-col items-center justify-center text-center">
+                  <Calendar size={40} className="text-slate-200 mb-4" />
+                  <p className="text-lg font-black text-slate-800">{isEn ? "No available slots" : "현재 신청할 수 있는 셀러 슬롯이 없습니다."}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {availableSellerSlots.map((slot: any) => (
+                    <div key={slot.id} className="bg-slate-50 border border-slate-100 rounded-[20px] p-5 hover:border-indigo-200 hover:shadow-md transition-all group">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg shrink-0 border border-indigo-200">
+                          {(slot.seller?.companyName || "S").charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-black text-base text-slate-800 truncate">{slot.seller?.companyName}</p>
+                          <p className="text-[11px] text-slate-400 font-bold truncate mt-0.5">{slot.seller?.name}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 mb-4 bg-white p-3 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                          <Calendar size={14} className="text-slate-400" />
+                          <span>{formatDateWithDay(slot.startTime)} {formatTime24And12(slot.startTime)}</span>
+                        </div>
+                        {slot.location && (
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                            <MapPin size={14} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{slot.location === TBA_VALUE ? 'TBA' : slot.location}</span>
+                          </div>
+                        )}
+                        {slot.description && (
+                          <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg italic mt-1 line-clamp-2">
+                            "{slot.description}"
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setApplyingToSellerSlot(slot); setSellerProposal(""); }}
+                        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black hover:bg-indigo-600 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Handshake size={14} /> {isEn ? "Apply for Meeting" : "이 시간에 미팅 신청하기"}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -2654,9 +2776,9 @@ export default function BuyerClient({
                   return (
                     <>
                       {hasRequests && (
-                        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-sm text-amber-700 flex gap-2.5 items-start leading-relaxed shadow-sm">
-                          <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                          <p>{isEn ? "Only location / link can be modified because there are pending requests." : "미팅 신청 기업이 있어 장소/링크만 변경 가능합니다."}</p>
+                        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-[11px] text-amber-700 flex gap-2.5 items-start leading-relaxed shadow-sm">
+                          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                          <p>{isEn ? "Date and time cannot be changed because there is an accepted or pending meeting." : "확정 또는 신청 중인 미팅이 있어 장소/링크만 변경 가능합니다."}</p>
                         </div>
                       )}
                       <div className="space-y-1.5">
@@ -3148,6 +3270,13 @@ export default function BuyerClient({
                     </a>
                   )}
                   <button
+                    onClick={() => { setSelectedOnePager(null); setApplyingToDirectSeller(op?.user); setSellerProposal(""); }}
+                    className="flex-1 py-4 bg-indigo-50 border-2 border-indigo-100 text-indigo-700 rounded-[16px] font-black text-sm hover:bg-indigo-100 transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Sparkles size={18} />
+                    {isEn ? "Direct Proposal" : "다이렉트 미팅 제안"}
+                  </button>
+                  <button
                     onClick={() => setSelectedOnePager(null)}
                     className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm"
                   >
@@ -3257,6 +3386,93 @@ export default function BuyerClient({
             </div>
             <div className="flex-1 overflow-hidden p-3 sm:p-6 bg-white">
               <MeetingChat meetingId={selectedChatMeeting.id} currentUser={user} isEn={isEn} meeting={selectedChatMeeting} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── [E] 셀러 슬롯 신청 모달 ── */}
+      {applyingToSellerSlot && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setApplyingToSellerSlot(null)} />
+          <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl relative w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 pb-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <Handshake className="text-indigo-500" size={24} />
+                {isEn ? "Apply for Meeting" : "이 시간에 신청하기"}
+              </h3>
+              <button onClick={() => setApplyingToSellerSlot(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors active:scale-95">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 space-y-4">
+              <p className="text-sm font-bold text-slate-500">
+                {isEn ? "Provide a brief description of your proposal. This helps the seller understand why they should accept this meeting." : "셀러가 제안을 수락할 수 있도록, 왜 미팅이 필요한지 간략한 설명을 남겨주세요."}
+              </p>
+              <textarea
+                value={sellerProposal}
+                onChange={e => setSellerProposal(e.target.value)}
+                placeholder={isEn ? "e.g., We are interested in your solution for our new project..." : "예) 귀사의 솔루션을 저희의 신규 프로젝트에 도입하고자..."}
+                className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl resize-none focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors custom-scrollbar"
+              />
+            </div>
+            <div className="p-8 pt-0 flex gap-3">
+              <button onClick={() => setApplyingToSellerSlot(null)} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98]">
+                {t.common.cancel}
+              </button>
+              <button onClick={handleApplyToSellerSlot} disabled={isPending || !sellerProposal.trim()} className="flex-[2] py-4 bg-indigo-600 text-white rounded-[16px] font-black text-sm hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                {isPending ? <RefreshCw className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                {isEn ? "Submit Application" : "신청서 제출"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── [E] 다이렉트 제안 모달 (슬롯 없음) ── */}
+      {applyingToDirectSeller && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setApplyingToDirectSeller(null)} />
+          <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl relative w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 pb-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <Sparkles className="text-amber-500" size={24} />
+                {isEn ? "Direct Proposal" : "다이렉트 미팅 제안"}
+              </h3>
+              <button onClick={() => setApplyingToDirectSeller(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors active:scale-95">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 space-y-4">
+              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl mb-2 border border-slate-200">
+                <div className="w-10 h-10 bg-indigo-100 text-indigo-700 flex items-center justify-center rounded-lg font-black shrink-0 uppercase">
+                  {((isEn && applyingToDirectSeller?.companyNameEn ? applyingToDirectSeller.companyNameEn : applyingToDirectSeller?.companyName) || "S").charAt(0)}
+                </div>
+                <div>
+                  <p className="font-black text-slate-700">
+                    {isEn && applyingToDirectSeller?.companyNameEn ? applyingToDirectSeller.companyNameEn : applyingToDirectSeller?.companyName}
+                  </p>
+                  <p className="text-xs font-bold text-slate-400">To: {isEn && applyingToDirectSeller?.nameEn ? applyingToDirectSeller.nameEn : applyingToDirectSeller?.name}</p>
+                </div>
+              </div>
+              <p className="text-sm font-bold text-slate-500">
+                {isEn ? "Write your direct proposal details. If accepted, the seller maps it to their schedule." : "이 기업에게 다이렉트로 제안할 미팅 내용과 목적을 적어주세요. 수락 시 셀러가 스케줄을 선택하여 확정합니다."}
+              </p>
+              <textarea
+                value={sellerProposal}
+                onChange={e => setSellerProposal(e.target.value)}
+                placeholder={isEn ? "e.g., We are looking for a tech partner like you..." : "예) 귀사의 XX 기술에 많은 관심을 갖고 있어, 도입 논의를 위해 만남을 요청드립니다..."}
+                className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl resize-none focus:outline-none focus:border-amber-500 focus:bg-white transition-colors custom-scrollbar"
+              />
+            </div>
+            <div className="p-8 pt-0 flex gap-3">
+              <button onClick={() => setApplyingToDirectSeller(null)} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-[16px] font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98]">
+                {t.common.cancel}
+              </button>
+              <button onClick={handleSendDirectToSeller} disabled={isPending || !sellerProposal.trim()} className="flex-[2] py-4 bg-gradient-to-tr from-amber-500 to-amber-400 text-white rounded-[16px] font-black text-sm hover:from-amber-600 hover:to-amber-500 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg shadow-amber-200">
+                {isPending ? <RefreshCw className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                {isEn ? "Send Proposal" : "제안 보내기"}
+              </button>
             </div>
           </div>
         </div>

@@ -371,3 +371,96 @@ export async function rejectDirectMeetingAction(meetingId: number, reason?: stri
     return { error: "거절 처리 중 오류가 발생했습니다." };
   }
 }
+
+// ==========================================
+// 바이어가 셀러 슬롯에 신청하는 액션
+// ==========================================
+
+// B-S1. 바이어가 셀러 슬롯에 미팅 신청
+export async function applyToSellerSlotAction(formData: FormData, buyerId: number) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return { error: "로그인이 필요합니다." };
+
+    const slotId = Number(formData.get("slotId"));
+    const sellerId = Number(formData.get("sellerId"));
+    const proposal = formData.get("proposal") as string;
+
+    if (!slotId || slotId === -1) {
+      // 다이렉트 제안 (슬롯 없이)
+      await db.meeting.create({
+        data: {
+          buyerId,
+          sellerId,
+          proposal,
+          status: "PENDING",
+          meetingType: "DIRECT_REQUEST",
+        }
+      });
+      revalidatePath("/buyer");
+      revalidatePath("/seller");
+      return { success: true };
+    }
+
+    const slot = await db.timeSlot.findUnique({
+      where: { id: slotId },
+      select: { startTime: true, status: true }
+    });
+
+    if (!slot) return { error: "존재하지 않는 슬롯입니다." };
+    if (slot.status !== "OPEN") return { error: "이미 마감된 슬롯입니다." };
+    if (slot.startTime < new Date()) return { error: "이미 시간이 지난 슬롯입니다." };
+
+    // 중복 신청 방지
+    const existing = await db.meeting.findFirst({
+      where: { timeSlotId: slotId, buyerId, status: { not: "REJECTED" } }
+    });
+    if (existing) return { error: "이미 신청한 슬롯입니다." };
+
+    await db.meeting.create({
+      data: {
+        timeSlotId: slotId,
+        buyerId,
+        sellerId,
+        proposal,
+        status: "PENDING",
+        meetingType: "REGULAR",
+      }
+    });
+
+    revalidatePath("/buyer");
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (error) {
+    console.error("셀러 슬롯 신청 오류:", error);
+    return { error: "미팅 신청 처리 중 오류가 발생했습니다." };
+  }
+}
+
+// B-S2. 바이어가 셀러에게 다이렉트 제안 (슬롯 없이)
+export async function sendDirectMeetingToSellerAction(formData: FormData, buyerId: number) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return { error: "로그인이 필요합니다." };
+
+    const sellerId = Number(formData.get("sellerId"));
+    const proposal = formData.get("proposal") as string;
+
+    await db.meeting.create({
+      data: {
+        buyerId,
+        sellerId,
+        proposal,
+        status: "PENDING",
+        meetingType: "DIRECT_REQUEST",
+      }
+    });
+
+    revalidatePath("/buyer");
+    revalidatePath("/seller");
+    return { success: true };
+  } catch (error) {
+    console.error("다이렉트 제안 오류:", error);
+    return { error: "다이렉트 제안 처리 중 오류가 발생했습니다." };
+  }
+}
