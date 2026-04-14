@@ -740,6 +740,7 @@ export default function SellerClient({
   const [editSellerLinkTba, setEditSellerLinkTba] = useState(false);
   const [editSellerNote, setEditSellerNote] = useState("");
   // 셀러가 받은 다이렉트 제안 수락 모달
+  const [acceptingSellerDirect, setAcceptingSellerDirect] = useState<any>(null);
   const [acceptSellerMappingSlotId, setAcceptSellerMappingSlotId] = useState<string>("");
   // 제안 수락 시 즉석 슬롯 생성용
   const [isCreatingNewSlotForAccept, setIsCreatingNewSlotForAccept] = useState(false);
