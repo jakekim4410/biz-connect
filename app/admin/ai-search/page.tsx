@@ -9,12 +9,10 @@ export default async function AiSearchPage() {
     select: { companyName: true, companyNameEn: true },
   });
 
-  const registeredCompanyNames = [
-    ...new Set([
-      ...users.map((u) => u.companyName).filter(Boolean),
-      ...users.map((u) => u.companyNameEn).filter(Boolean),
-    ]),
-  ];
+  const companyNamesRaw: string[] = users.flatMap((u: any) =>
+    [u.companyName, u.companyNameEn].filter((v: any): v is string => typeof v === "string" && v.length > 0)
+  );
+  const registeredCompanyNames = [...new Set(companyNamesRaw)];
 
   return <AiSearchClient registeredCompanyNames={registeredCompanyNames} />;
 }

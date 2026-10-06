@@ -66,7 +66,7 @@ export async function GET(req: Request) {
         orderBy: [{ isMaster: 'desc' }, { createdAt: 'asc' }]
       });
 
-      const matchedMembers = allBuyers.filter(u => 
+      const matchedMembers = allBuyers.filter((u: any) => 
         normalizeCompanyName(u.companyName).includes(normalizedQuery) || 
         normalizedQuery.includes(normalizeCompanyName(u.companyName))
       );
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       // 만약 일치하는 회사가 여러 개라면? (가장 잘 맞는 첫 번째 회사 멤버들만 반환하도록 그룹화)
       if (matchedMembers.length > 0) {
           const firstCompanyName = matchedMembers[0].companyName;
-          const finalMembers = matchedMembers.filter(m => m.companyName === firstCompanyName);
+          const finalMembers = matchedMembers.filter((m: any) => m.companyName === firstCompanyName);
           return NextResponse.json({ members: finalMembers });
       }
 

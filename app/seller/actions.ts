@@ -50,7 +50,7 @@ export async function applyMeetingAction(formData: FormData, sellerId: number) {
         const allBuyers = await db.user.findMany({ where: { role: "BUYER" } });
         const { normalizeCompanyName } = await import("@/lib/matchUtils");
         const normalizedInput = normalizeCompanyName(buyerCompanyName);
-        buyer = allBuyers.find(u => normalizeCompanyName(u.companyName) === normalizedInput) || null;
+        buyer = allBuyers.find((u: any) => normalizeCompanyName(u.companyName) === normalizedInput) || null;
       }
 
       if (!buyer) {
@@ -312,7 +312,7 @@ export async function saveOnePager(formData: FormData) {
       select: { id: true }
     });
 
-    const memberIds = companyMembers.map(m => m.id).filter(id => id !== userId);
+    const memberIds = companyMembers.map((m: any) => m.id).filter((id: any) => id !== userId);
     
     if (memberIds.length > 0) {
       await db.onePager.updateMany({
@@ -349,7 +349,7 @@ export async function checkExistingCompanyAction(companyName: string) {
       },
     });
 
-    const uniqueCompanies = Array.from(new Map(existingCompanies.map(item => [item.companyName, item])).values());
+    const uniqueCompanies = Array.from(new Map(existingCompanies.map((item: any) => [item.companyName, item])).values());
     return uniqueCompanies;
   } catch (e) {
     console.error("회사 검색 에러:", e);
@@ -617,7 +617,7 @@ export async function acceptDirectMeetingWithNewSlotAction(
     const currentUserId = Number((session.user as any).id);
     
     // 트랜잭션으로 슬롯 생성 + 미팅 업데이트
-    const [newSlot, confirmedMeeting] = await db.$transaction(async (tx) => {
+    const [newSlot, confirmedMeeting] = await db.$transaction(async (tx: any) => {
       // 1. 슬롯 생성
       const slot = await tx.timeSlot.create({
         data: {

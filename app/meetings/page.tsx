@@ -40,7 +40,7 @@ export default async function MeetingsPage() {
         <h1 className="text-3xl font-black mb-8 text-slate-800 tracking-tight">BizConnect 미팅 현황</h1>
 
         <div className="grid gap-4">
-          {meetings.map((meeting) => (
+          {meetings.map((meeting: any) => (
             <div key={meeting.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-6">
                 <div className={`w-24 text-center py-1.5 rounded-full text-xs font-black uppercase ${

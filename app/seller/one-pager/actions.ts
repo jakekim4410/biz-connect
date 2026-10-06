@@ -121,7 +121,7 @@ export async function saveOnePager(formData: FormData) {
       select: { id: true }
     });
 
-    const memberIds = companyMembers.map(m => m.id).filter(id => id !== userId);
+    const memberIds = companyMembers.map((m: any) => m.id).filter((id: any) => id !== userId);
 
     // 3. 동일 회사의 다른 멤버들의 원페이저를 upsert (없으면 생성, 있으면 업데이트)
     //    이렇게 해야 원페이저가 없던 멤버도 배너가 사라진다.

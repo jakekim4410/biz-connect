@@ -60,6 +60,53 @@ const USER_TYPES = {
   en: ["VC", "AC", "Buyer", "Startup", "Other"],
 };
 
+// ─── KSGC 2026 참가사 목록 ───
+const KSGC_COMPANIES = [
+  "Alpha AI Technology Limited",
+  "Virtuosis",
+  "LegitApp Authentication",
+  "PurCity",
+  "UpperClass (By Better Tech Pte Ltd)",
+  "Yawavi Corp (주식회사 야와비)",
+  "Vyorius Drones Private Limited",
+  "PT RUANG HALAL INDONESIA",
+  "Flash Fluency",
+  "Badeum",
+  "Blitz Laser Limited (Dynalas)",
+  "Universum VR",
+  "PerformID",
+  "THESEN KOREA Inc.",
+  "Zence Object Tech",
+  "Denovo LLC",
+  "Hiro Robotics",
+  "Katriyam",
+  "Sponix Tech LLC",
+  "Yindii (WATAWASTE PTE LTD)",
+  "Lumen",
+  "Linque GmbH",
+  "Vizzle",
+  "Infiheal Healthtech Private Limited",
+  "Aleph Digital Technologies Pte Ltd",
+  "Electica Energy",
+  "Calque, Inc",
+  "Dots",
+  "Slise.Inc (The New Era of Shopping)",
+  "AIAWA SAS",
+  "EduShorts",
+  "Tiami Networks",
+  "Kolaro",
+  "GamiphyAI",
+  "Karyosoft Inc.",
+  "CMY Cubes",
+  "Climat8 SARL",
+  "Ailytics",
+  "Acie",
+  "Wave Photonics",
+  "ELKXA",
+  "Fotoshi",
+  "Thérapies Cognicorp+ Inc (Cogni4health)",
+];
+
 // ─── 개인정보 처리방침 콘텐츠 (ko/en) ───
 const PRIVACY_CONTENT = {
   ko: {
@@ -205,6 +252,11 @@ export default function RegisterPage() {
   const [ceoNameKo, setCeoNameKo] = useState("");
   const [ceoNameEn, setCeoNameEn] = useState("");
   const [businessNumber, setBusinessNumber] = useState("");
+
+  // ─── KSGC 참가사 선택 ───
+  const [isKsgcParticipant, setIsKsgcParticipant] = useState(false);
+  const [ksgcCompany, setKsgcCompany] = useState("");
+  const [ksgcSearch, setKsgcSearch] = useState("");
 
   // ─── [추가] 원페이저 연동 비즈니스 필드 상태 ───
   const [industrySector, setIndustrySector] = useState("");
@@ -504,6 +556,13 @@ export default function RegisterPage() {
             formData.set("ceoNameKo", ceoNameKo);
           }
           formData.set("ceoNameEn", ceoNameEn);
+
+          // ─── KSGC 참가사 선택 시: 회사명 + businessNumber 오버라이드 ───
+          if (role === "SELLER" && !isKorean && isKsgcParticipant && ksgcCompany) {
+            formData.set("companyName", ksgcCompany);
+            formData.set("companyNameEn", ksgcCompany);
+            formData.set("businessNumber", `KSGC-${ksgcCompany}`);
+          }
 
           if (isMasterFlow) {
             formData.set("companyNameEn", companyNameEn);
@@ -915,40 +974,126 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* 사업자등록번호 */}
+            {/* 사업자등록번호 / KSGC 참가사 선택 */}
             <div className="col-span-1 sm:col-span-2">
-              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
-                {selectedCountry.hasBizNum ? (selectedCountry.bizLabel || r.bizNumberLabel) : r.bizNumberLabel}
-                {" "}{bizNumRequired && <span className="text-rose-500">*</span>}
-                {!selectedCountry.hasBizNum && (
-                  <span className="ml-1 font-bold text-slate-300 normal-case">
-                    ({locale === "ko" ? `${selectedCountry.name}에서는 해당 없음` : `Not applicable for ${selectedCountry.nameEn}`})
-                  </span>
-                )}
-              </label>
-              <input
-                name="businessNumber"
-                placeholder={
-                  selectedCountry.hasBizNum
-                    ? (selectedCountry.bizFormat || (locale === "ko" ? "등록번호 입력" : "Enter registration number"))
-                    : (locale === "ko" ? "해당 국가는 사업자번호 불필요" : "Not required for this country")
-                }
-                maxLength={selectedCountry.hasBizNum ? (selectedCountry.bizLength + 5) : 0}
-                required={bizNumRequired}
-                value={businessNumber}
-                onChange={handleBusinessNumberChange}
-                disabled={isRoleLocked || !selectedCountry.hasBizNum}
-                className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none transition-all text-sm sm:text-base ${
-                  isRoleLocked || !selectedCountry.hasBizNum
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
-                    : 'bg-white border-slate-200 focus:bg-white focus:border-blue-500'
-                }`}
-              />
-              {isRoleLocked && businessNumber && (
-                <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">{r.bizNumberLocked}</p>
+              {/* ── 비한국 SELLER: KSGC 참가사 여부 토글 ── */}
+              {role === "SELLER" && !isKorean && (
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isKsgcParticipant;
+                      setIsKsgcParticipant(next);
+                      if (!next) {
+                        setKsgcCompany("");
+                        setKsgcSearch("");
+                        setBusinessNumber("");
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all text-sm font-black ${
+                      isKsgcParticipant
+                        ? "bg-amber-50 border-amber-400 text-amber-700"
+                        : "bg-white border-slate-200 text-slate-500 hover:border-amber-300"
+                    }`}
+                  >
+                    <span className="text-lg">{isKsgcParticipant ? "✅" : "🏆"}</span>
+                    <span>{locale === "ko" ? "KSGC 2026 참가사입니다" : "I am a KSGC 2026 Participant Company"}</span>
+                  </button>
+                </div>
               )}
-              {!isRoleLocked && selectedCountry.hasBizNum && role === "SELLER" && (
-                <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">{r.bizNumberHint}</p>
+
+              {/* ── KSGC 참가사 선택 드롭다운 ── */}
+              {role === "SELLER" && !isKorean && isKsgcParticipant ? (
+                <div>
+                  <label className="text-[10px] sm:text-[11px] font-black text-amber-600 uppercase ml-1 block mb-1.5">
+                    🏆 {locale === "ko" ? "KSGC 참가사 선택" : "Select KSGC Company"}
+                    <span className="text-rose-500 ml-1">*</span>
+                  </label>
+                  {/* 검색 박스 */}
+                  <input
+                    type="text"
+                    placeholder={locale === "ko" ? "회사명 검색..." : "Search company name..."}
+                    value={ksgcSearch}
+                    onChange={(e) => setKsgcSearch(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-amber-300 outline-none bg-white focus:border-amber-500 text-sm mb-2"
+                  />
+                  {/* 드롭다운 목록 */}
+                  <div className="max-h-52 overflow-y-auto rounded-2xl border border-amber-200 bg-white shadow-md">
+                    {KSGC_COMPANIES
+                      .filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase()))
+                      .map(company => (
+                        <button
+                          key={company}
+                          type="button"
+                          onClick={() => {
+                            setKsgcCompany(company);
+                            setCompanyName(company);
+                            setCompanyNameEn(company);
+                            setBusinessNumber(`KSGC-${company}`);
+                            setKsgcSearch("");
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors border-b border-amber-50 last:border-0 ${
+                            ksgcCompany === company
+                              ? "bg-amber-100 font-black text-amber-800"
+                              : "hover:bg-amber-50 text-slate-700 font-medium"
+                          }`}
+                        >
+                          {ksgcCompany === company && <span className="mr-2">✓</span>}
+                          {company}
+                        </button>
+                      ))
+                    }
+                    {KSGC_COMPANIES.filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase())).length === 0 && (
+                      <p className="px-4 py-3 text-xs text-slate-400 font-bold">
+                        {locale === "ko" ? "검색 결과가 없습니다." : "No results found."}
+                      </p>
+                    )}
+                  </div>
+                  {ksgcCompany && (
+                    <p className="text-[10px] text-amber-600 font-bold mt-1.5 ml-2">
+                      ✅ {locale === "ko" ? `선택됨: ${ksgcCompany}` : `Selected: ${ksgcCompany}`}
+                    </p>
+                  )}
+                  {/* hidden input으로 businessNumber 전송 */}
+                  <input type="hidden" name="businessNumber" value={businessNumber} />
+                </div>
+              ) : (
+                /* ── 기존 사업자등록번호 입력 필드 ── */
+                <div>
+                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase ml-1 block mb-1.5">
+                    {selectedCountry.hasBizNum ? (selectedCountry.bizLabel || r.bizNumberLabel) : r.bizNumberLabel}
+                    {" "}{bizNumRequired && <span className="text-rose-500">*</span>}
+                    {!selectedCountry.hasBizNum && (
+                      <span className="ml-1 font-bold text-slate-300 normal-case">
+                        ({locale === "ko" ? `${selectedCountry.name}에서는 해당 없음` : `Not applicable for ${selectedCountry.nameEn}`})
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    name="businessNumber"
+                    placeholder={
+                      selectedCountry.hasBizNum
+                        ? (selectedCountry.bizFormat || (locale === "ko" ? "등록번호 입력" : "Enter registration number"))
+                        : (locale === "ko" ? "해당 국가는 사업자번호 불필요" : "Not required for this country")
+                    }
+                    maxLength={selectedCountry.hasBizNum ? (selectedCountry.bizLength + 5) : 0}
+                    required={bizNumRequired}
+                    value={businessNumber}
+                    onChange={handleBusinessNumberChange}
+                    disabled={isRoleLocked || !selectedCountry.hasBizNum}
+                    className={`w-full px-4 py-3 sm:p-4 rounded-2xl border outline-none transition-all text-sm sm:text-base ${
+                      isRoleLocked || !selectedCountry.hasBizNum
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-200 focus:bg-white focus:border-blue-500'
+                    }`}
+                  />
+                  {isRoleLocked && businessNumber && (
+                    <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">{r.bizNumberLocked}</p>
+                  )}
+                  {!isRoleLocked && selectedCountry.hasBizNum && role === "SELLER" && (
+                    <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">{r.bizNumberHint}</p>
+                  )}
+                </div>
               )}
             </div>
 

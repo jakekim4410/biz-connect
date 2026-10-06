@@ -24,7 +24,7 @@ export async function checkExistingCompanyAction(companyName: string) {
         businessNumber: true,
       },
     });
-    return Array.from(new Map(existingCompanies.map(item => [item.companyName, item])).values());
+    return Array.from(new Map(existingCompanies.map((item: any) => [item.companyName, item])).values());
   } catch (e) {
     console.error("회사 검색 에러:", e);
     return [];
@@ -96,6 +96,8 @@ export async function registerUserAction(formData: FormData) {
   if (!privacyConsent) {
     return { error: "개인정보 처리방침에 동의해주세요." };
   }
+  // KSGC 참가사 선택 시 businessNumber는 'KSGC-{companyName}' 형태로 전달됨
+  const isKsgcEntry = businessNumber?.startsWith("KSGC-");
   if (role === "SELLER" && businessNumber === "" && formData.get("bizNumRequired") === "true") {
     return { error: "스타트업(SELLER)은 사업자등록번호를 반드시 입력해야 합니다." };
   }

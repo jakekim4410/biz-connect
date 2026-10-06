@@ -24,7 +24,7 @@ export async function autoExpirePastMeetings() {
 
     if (expiredMeetings.length === 0) return { expired: 0 };
 
-    const expiredIds = expiredMeetings.map(m => m.id);
+    const expiredIds = expiredMeetings.map((m: any) => m.id);
 
     // 일괄 REJECTED 처리
     await db.meeting.updateMany({

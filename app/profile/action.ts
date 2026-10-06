@@ -120,7 +120,7 @@ export async function updateProfileAction(formData: FormData) {
         linkedinUrl:    linkedinUrl || currentOnePager?.linkedinUrl || "",
       };
 
-      await db.$transaction(async (tx) => {
+      await db.$transaction(async (tx: any) => {
         // 동일 회사 소속 전원 companyName 동기화
         if (newCompanyName && newCompanyName !== currentUser.companyName) {
           await tx.user.updateMany({

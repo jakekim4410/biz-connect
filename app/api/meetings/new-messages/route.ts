@@ -32,10 +32,10 @@ export async function GET() {
     // 클라이언트에서 localStorage(lastRead_${id})와 비교할 수 있도록
     // 상대방이 보낸 메시지가 있는 미팅 정보를 반환
     const result = meetings
-      .filter(m => m.messages.length > 0 && m.messages[0].senderId !== userId)
-      .map(m => ({
+      .filter((m: any) => m.messages.length > 0 && m.messages[0].senderId !== userId)
+      .map((m: any) => ({
         meetingId: m.id,
-        lastMessageAt: m.messages[0].createdAt.getTime(), // Unix ms timestamp
+        lastMessageAt: m.messages[0].createdAt.getTime(),
         lastSenderId: m.messages[0].senderId
       }));
 

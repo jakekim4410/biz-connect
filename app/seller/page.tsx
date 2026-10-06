@@ -123,18 +123,18 @@ export default async function SellerPage() {
 
   // ✅ 데이터 가공 및 분류
   const confirmedMeetings = allMeetingsRaw
-    .filter(m => ["ACCEPTED", "CONFIRMED"].includes(m.status))
-    .sort((a, b) => {
+    .filter((m: any) => ["ACCEPTED", "CONFIRMED"].includes(m.status))
+    .sort((a: any, b: any) => {
       const timeA = a.timeSlot?.startTime ? new Date(a.timeSlot.startTime).getTime() : 0;
       const timeB = b.timeSlot?.startTime ? new Date(b.timeSlot.startTime).getTime() : 0;
       return timeA - timeB;
     });
-  const pendingMeetings = allMeetingsRaw.filter(m => m.status === "PENDING" && m.meetingType !== "DIRECT_REQUEST");
-  const rejectedMeetings = allMeetingsRaw.filter(m => ["REJECTED", "CANCELLED"].includes(m.status));
+  const pendingMeetings = allMeetingsRaw.filter((m: any) => m.status === "PENDING" && m.meetingType !== "DIRECT_REQUEST");
+  const rejectedMeetings = allMeetingsRaw.filter((m: any) => ["REJECTED", "CANCELLED"].includes(m.status));
 
-  const pendingMembers = teamMembersRaw.filter(m => m.approvalStatus === "PENDING");
-  const approvedMembers = teamMembersRaw.filter(m => m.approvalStatus === "APPROVED");
-  const rejectedTeamMembers = teamMembersRaw.filter(m => m.approvalStatus === "REJECTED");
+  const pendingMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "PENDING");
+  const approvedMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "APPROVED");
+  const rejectedTeamMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "REJECTED");
 
   const companyHasOnePager = !!companyOnePager;
 

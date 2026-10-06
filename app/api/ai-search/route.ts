@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { anthropic } from "@/lib/anthropic";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 // ─────────────────────────────────────────────
 // 0. 쿼리 언어 감지 함수 (신규 추가)
 // 한글 유니코드 범위로 판별 — 코드 레벨에서 언어를 감지해

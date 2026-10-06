@@ -115,15 +115,15 @@ export default async function BuyerPage() {
   ]);
 
   // ✅ 데이터 가공 및 분류
-  const confirmedMeetings = allMeetingsRaw.filter(m => ["ACCEPTED", "CONFIRMED"].includes(m.status));
-  const rejectedMeetings = allMeetingsRaw.filter(m => ["REJECTED", "CANCELLED"].includes(m.status));
+  const confirmedMeetings = allMeetingsRaw.filter((m: any) => ["ACCEPTED", "CONFIRMED"].includes(m.status));
+  const rejectedMeetings = allMeetingsRaw.filter((m: any) => ["REJECTED", "CANCELLED"].includes(m.status));
 
-  const pendingMembers = teamMembersRaw.filter(m => m.approvalStatus === "PENDING");
-  const approvedMembers = teamMembersRaw.filter(m => m.approvalStatus === "APPROVED");
-  const rejectedTeamMembers = teamMembersRaw.filter(m => m.approvalStatus === "REJECTED");
+  const pendingMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "PENDING");
+  const approvedMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "APPROVED");
+  const rejectedTeamMembers = teamMembersRaw.filter((m: any) => m.approvalStatus === "REJECTED");
 
   // ✅ [N+1 문제 해결] 각 제안의 셀러 회사 멤버들을 하나의 쿼리로 일괄 조회
-  const sellerCompanyNames = Array.from(new Set(directRequestsRaw.map(req => req.seller.companyName)));
+  const sellerCompanyNames = Array.from(new Set(directRequestsRaw.map((req: any) => req.seller.companyName)));
 
   const allSellerMembers = sellerCompanyNames.length > 0 ? await db.user.findMany({
     where: {
@@ -135,8 +135,8 @@ export default async function BuyerPage() {
   }) : [];
 
   // ✅ 제안 정보와 멤버 정보 매핑
-  const directRequests = directRequestsRaw.map((req) => {
-    const companyMembers = allSellerMembers.filter(m => m.companyName === req.seller.companyName);
+  const directRequests = directRequestsRaw.map((req: any) => {
+    const companyMembers = allSellerMembers.filter((m: any) => m.companyName === req.seller.companyName);
     return {
       ...req,
       seller: { ...req.seller, members: companyMembers }
