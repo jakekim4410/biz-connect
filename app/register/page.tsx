@@ -393,7 +393,7 @@ export default function RegisterPage() {
   const isPasswordMatch = password === confirmPassword && password !== "";
   const isPasswordValid = password.length >= 8;
   const fullPhone = `${countryCode}-${phoneLocal}`;
-  const bizNumRequired = role === "SELLER" && selectedCountry.hasBizNum;
+  const bizNumRequired = role === "SELLER" && selectedCountry.hasBizNum && !isKsgcParticipant;
 
   const canSubmit =
     isPasswordMatch &&
@@ -402,6 +402,7 @@ export default function RegisterPage() {
     emailStatus === "available" &&
     phoneStatus === "valid" &&
     privacyConsent &&
+    (!isKsgcParticipant || ksgcCompany.length > 0) &&
     (!bizNumRequired || businessNumber.length >= 1);
 
   return (
@@ -419,9 +420,17 @@ export default function RegisterPage() {
           >
             <div className="p-4 border-b border-slate-100">
               <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden" />
-              <p className="text-xs font-black text-slate-500 text-center mb-3">
-                {locale === "ko" ? "국가 선택" : "Select Country"}
+              <p className="text-xs font-black text-slate-500 text-center mb-2">
+                {locale === "ko" ? "전화번호 국가코드 선택" : "Select Phone Country Code"}
               </p>
+              <div className="mb-3 p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 flex items-start gap-2">
+                <span className="text-sm shrink-0">🏆</span>
+                <span>
+                  {locale === "ko"
+                    ? "KSGC 2026 참가사는 국가와 무관하게 가입 가능하며, 폼 상단에서 기업명을 직접 선택하실 수 있습니다."
+                    : "KSGC 2026 participants can register regardless of country by selecting their company name in the form."}
+                </span>
+              </div>
               <input
                 type="text"
                 placeholder={locale === "ko" ? "국가명 또는 코드 검색..." : "Search country or code..."}
@@ -558,7 +567,7 @@ export default function RegisterPage() {
           formData.set("ceoNameEn", ceoNameEn);
 
           // ─── KSGC 참가사 선택 시: 회사명 + businessNumber 오버라이드 ───
-          if (role === "SELLER" && !isKorean && isKsgcParticipant && ksgcCompany) {
+          if (role === "SELLER" && isKsgcParticipant && ksgcCompany) {
             formData.set("companyName", ksgcCompany);
             formData.set("companyNameEn", ksgcCompany);
             formData.set("businessNumber", `KSGC-${ksgcCompany}`);
@@ -627,6 +636,115 @@ export default function RegisterPage() {
               </select>
               {isRoleLocked && <p className="text-[10px] text-blue-500 font-bold mt-1.5 ml-2">{r.roleLocked}</p>}
             </div>
+
+            {/* ─── KSGC 2026 참가사 선택 섹션 (스타트업 선택 시 상단에 바로 노출) ─── */}
+            {role === "SELLER" && (
+              <div className="col-span-1 sm:col-span-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-300/80 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-2.5">
+                    <span className="text-2xl shrink-0">🏆</span>
+                    <div>
+                      <p className="text-sm font-black text-amber-900">
+                        {locale === "ko" ? "KSGC 2026 참가기업이신가요?" : "Are you a KSGC 2026 Participant Company?"}
+                      </p>
+                      <p className="text-xs text-amber-700/80 mt-0.5">
+                        {locale === "ko"
+                          ? "참가기업은 회사명을 선택하시면 사업자등록번호 입력 없이 간편하게 가입됩니다."
+                          : "Select your company name to register without needing a business registration number."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsKsgcParticipant(true);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+                        isKsgcParticipant
+                          ? "bg-amber-500 text-white shadow-md shadow-amber-300/50 scale-[1.02]"
+                          : "bg-white text-amber-800 border border-amber-300 hover:bg-amber-100"
+                      }`}
+                    >
+                      {locale === "ko" ? "예 (참가사 선택)" : "Yes (Select Company)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsKsgcParticipant(false);
+                        setKsgcCompany("");
+                        setKsgcSearch("");
+                        setBusinessNumber("");
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                        !isKsgcParticipant
+                          ? "bg-slate-700 text-white"
+                          : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {locale === "ko" ? "아니오 (일반)" : "No (General)"}
+                    </button>
+                  </div>
+                </div>
+
+                {isKsgcParticipant && (
+                  <div className="pt-3 border-t border-amber-200 space-y-2">
+                    <label className="text-xs font-black text-amber-800 block">
+                      {locale === "ko" ? "🏢 참가기업 선택 (44개사 목록)" : "🏢 Select KSGC Company (44 Companies)"}
+                      <span className="text-rose-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={locale === "ko" ? "회사명 검색 (영문/한글)..." : "Search company name..."}
+                      value={ksgcSearch}
+                      onChange={(e) => setKsgcSearch(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-amber-300 bg-white text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                    />
+                    <div className="max-h-48 overflow-y-auto rounded-xl border border-amber-200 bg-white shadow-inner divide-y divide-amber-50">
+                      {KSGC_COMPANIES
+                        .filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase()))
+                        .map(company => (
+                          <button
+                            key={company}
+                            type="button"
+                            onClick={() => {
+                              setKsgcCompany(company);
+                              setCompanyName(company);
+                              setCompanyNameEn(company);
+                              setBusinessNumber(`KSGC-${company}`);
+                              setKsgcSearch("");
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors flex items-center justify-between ${
+                              ksgcCompany === company
+                                ? "bg-amber-100 font-black text-amber-900"
+                                : "hover:bg-amber-50 text-slate-700"
+                            }`}
+                          >
+                            <span>{company}</span>
+                            {ksgcCompany === company && <span className="text-amber-600 font-black">✓ 선택됨</span>}
+                          </button>
+                        ))
+                      }
+                      {KSGC_COMPANIES.filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase())).length === 0 && (
+                        <p className="px-4 py-3 text-xs text-slate-400">
+                          {locale === "ko" ? "검색 결과가 없습니다." : "No matching company found."}
+                        </p>
+                      )}
+                    </div>
+                    {ksgcCompany ? (
+                      <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3.5 py-2.5 rounded-xl text-xs font-black text-emerald-800">
+                        <span>✅</span>
+                        <span>{locale === "ko" ? `선택된 참가사: ${ksgcCompany}` : `Selected Company: ${ksgcCompany}`}</span>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-700 font-bold ml-1">
+                        {locale === "ko" ? "👆 위 목록에서 참가사를 클릭하여 선택해주세요." : "👆 Please click to select your company from the list above."}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 이메일 */}
             <div className="col-span-1">
@@ -974,87 +1092,26 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* 사업자등록번호 / KSGC 참가사 선택 */}
+            {/* 사업자등록번호 / KSGC 참가사 안내 */}
             <div className="col-span-1 sm:col-span-2">
-              {/* ── 비한국 SELLER: KSGC 참가사 여부 토글 ── */}
-              {role === "SELLER" && !isKorean && (
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !isKsgcParticipant;
-                      setIsKsgcParticipant(next);
-                      if (!next) {
-                        setKsgcCompany("");
-                        setKsgcSearch("");
-                        setBusinessNumber("");
-                      }
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all text-sm font-black ${
-                      isKsgcParticipant
-                        ? "bg-amber-50 border-amber-400 text-amber-700"
-                        : "bg-white border-slate-200 text-slate-500 hover:border-amber-300"
-                    }`}
-                  >
-                    <span className="text-lg">{isKsgcParticipant ? "✅" : "🏆"}</span>
-                    <span>{locale === "ko" ? "KSGC 2026 참가사입니다" : "I am a KSGC 2026 Participant Company"}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* ── KSGC 참가사 선택 드롭다운 ── */}
-              {role === "SELLER" && !isKorean && isKsgcParticipant ? (
-                <div>
-                  <label className="text-[10px] sm:text-[11px] font-black text-amber-600 uppercase ml-1 block mb-1.5">
-                    🏆 {locale === "ko" ? "KSGC 참가사 선택" : "Select KSGC Company"}
-                    <span className="text-rose-500 ml-1">*</span>
-                  </label>
-                  {/* 검색 박스 */}
-                  <input
-                    type="text"
-                    placeholder={locale === "ko" ? "회사명 검색..." : "Search company name..."}
-                    value={ksgcSearch}
-                    onChange={(e) => setKsgcSearch(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-amber-300 outline-none bg-white focus:border-amber-500 text-sm mb-2"
-                  />
-                  {/* 드롭다운 목록 */}
-                  <div className="max-h-52 overflow-y-auto rounded-2xl border border-amber-200 bg-white shadow-md">
-                    {KSGC_COMPANIES
-                      .filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase()))
-                      .map(company => (
-                        <button
-                          key={company}
-                          type="button"
-                          onClick={() => {
-                            setKsgcCompany(company);
-                            setCompanyName(company);
-                            setCompanyNameEn(company);
-                            setBusinessNumber(`KSGC-${company}`);
-                            setKsgcSearch("");
-                          }}
-                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors border-b border-amber-50 last:border-0 ${
-                            ksgcCompany === company
-                              ? "bg-amber-100 font-black text-amber-800"
-                              : "hover:bg-amber-50 text-slate-700 font-medium"
-                          }`}
-                        >
-                          {ksgcCompany === company && <span className="mr-2">✓</span>}
-                          {company}
-                        </button>
-                      ))
-                    }
-                    {KSGC_COMPANIES.filter(c => c.toLowerCase().includes(ksgcSearch.toLowerCase())).length === 0 && (
-                      <p className="px-4 py-3 text-xs text-slate-400 font-bold">
-                        {locale === "ko" ? "검색 결과가 없습니다." : "No results found."}
+              {isKsgcParticipant && ksgcCompany ? (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🏆</span>
+                    <div>
+                      <p className="text-xs sm:text-sm font-black">
+                        {locale === "ko" ? "KSGC 2026 공식 참가기업 확인됨" : "KSGC 2026 Participant Verified"}
                       </p>
-                    )}
+                      <p className="text-[11px] text-amber-700">
+                        {locale === "ko"
+                          ? `[${ksgcCompany}] 참가기업은 사업자등록번호 입력이 면제됩니다.`
+                          : `[${ksgcCompany}] is exempted from business registration number.`}
+                      </p>
+                    </div>
                   </div>
-                  {ksgcCompany && (
-                    <p className="text-[10px] text-amber-600 font-bold mt-1.5 ml-2">
-                      ✅ {locale === "ko" ? `선택됨: ${ksgcCompany}` : `Selected: ${ksgcCompany}`}
-                    </p>
-                  )}
-                  {/* hidden input으로 businessNumber 전송 */}
+                  <span className="text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg text-xs font-black shrink-0">
+                    {locale === "ko" ? "✓ 면제됨" : "✓ Exempted"}
+                  </span>
                   <input type="hidden" name="businessNumber" value={businessNumber} />
                 </div>
               ) : (
