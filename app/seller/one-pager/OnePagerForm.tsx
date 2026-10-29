@@ -544,35 +544,55 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
       // 1. 새 피치덱 파일이 선택된 경우: 브라우저에서 Supabase Storage로 직접 업로드 (Server Action 페이로드 1MB/4.5MB 제한 회피)
       if (selectedFile) {
         setLoadingStatus(isKo ? "자료 업로드 중..." : "Uploading deck...");
+        let uploadedUrl = "";
 
-        const uploadInfo = await getPitchDeckUploadUrl(selectedFile.name);
-        if (!uploadInfo.success || !uploadInfo.signedUrl) {
-          throw new Error(uploadInfo.error || (isKo ? "업로드 URL을 발급받지 못했습니다." : "Failed to get upload URL."));
+        // 전략 1: 4MB 이하 파일은 내부 Route Handler (/api/seller/upload-deck)로 안정적 업로드
+        if (selectedFile.size <= 4.2 * 1024 * 1024) {
+          try {
+            const apiFormData = new FormData();
+            apiFormData.append("file", selectedFile);
+            const apiRes = await fetch("/api/seller/upload-deck", {
+              method: "POST",
+              body: apiFormData,
+            });
+            const apiData = await apiRes.json();
+            if (apiData.success && apiData.publicUrl) {
+              uploadedUrl = apiData.publicUrl;
+            }
+          } catch (e) {
+            console.warn("API route upload fallback to signed URL", e);
+          }
         }
 
-        const uploadFormData = new FormData();
-        uploadFormData.append("cacheControl", "3600");
-        uploadFormData.append("", selectedFile, selectedFile.name);
+        // 전략 2: 4MB 초과이거나 전략 1 실패 시 Signed URL 다이렉트 업로드 (표준 바이너리 PUT 전송)
+        if (!uploadedUrl) {
+          const uploadInfo = await getPitchDeckUploadUrl(selectedFile.name);
+          if (!uploadInfo.success || !uploadInfo.signedUrl) {
+            throw new Error(uploadInfo.error || (isKo ? "업로드 URL을 발급받지 못했습니다." : "Failed to get upload URL."));
+          }
 
-        const uploadRes = await fetch(uploadInfo.signedUrl, {
-          method: "PUT",
-          headers: {
-            "x-upsert": "true",
-          },
-          body: uploadFormData,
-        });
+          const uploadRes = await fetch(uploadInfo.signedUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/pdf",
+            },
+            body: selectedFile,
+          });
 
-        if (!uploadRes.ok) {
-          const errDetail = await uploadRes.text();
-          console.error("Direct upload failed:", uploadRes.status, errDetail);
-          throw new Error(
-            isKo
-              ? "파일 업로드 중 오류가 발생했습니다. 네트워크 상태 확인 후 다시 시도해 주세요."
-              : "Failed to upload file to storage. Please try again."
-          );
+          if (!uploadRes.ok) {
+            const errDetail = await uploadRes.text();
+            console.error("Direct upload failed:", uploadRes.status, errDetail);
+            throw new Error(
+              isKo
+                ? "파일 업로드 중 오류가 발생했습니다. 네트워크 상태 확인 후 다시 시도해 주세요."
+                : "Failed to upload file to storage. Please try again."
+            );
+          }
+
+          uploadedUrl = uploadInfo.publicUrl;
         }
 
-        finalPitchDeckUrl = uploadInfo.publicUrl;
+        finalPitchDeckUrl = uploadedUrl;
       }
 
       // 2. 가벼워진 텍스트 데이터만 Server Action으로 전송하여 DB 저장
