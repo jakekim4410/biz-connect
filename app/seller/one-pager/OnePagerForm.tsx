@@ -441,6 +441,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
 
   // ─── 데이터 매핑 (서버에서 받은 스키마 구조와 1:1 매칭) ───
   const d_companyKr = initialData?.companyNameKr || "";
@@ -535,13 +536,21 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // ⭐ 중요: 비동기 작업(await) 이후에는 React/브라우저 이벤트 객체의 e.currentTarget이 null이 되므로,
+    // 핸들러 시작 시점에 폼 엘리먼트와 FormData를 동기적으로 즉시 생성 및 보존합니다.
+    const formElement = e.currentTarget || formRef.current;
+    if (!formElement) return;
+
+    const formData = new FormData(formElement);
+
     setLoading(true);
     setLoadingStatus(isKo ? "저장 준비 중..." : "Preparing...");
 
     try {
       let finalPitchDeckUrl = (initialData?.pitchDeckUrl as string) || "";
 
-      // 1. 새 피치덱 파일이 선택된 경우: 브라우저에서 Supabase Storage로 직접 업로드 (Server Action 페이로드 1MB/4.5MB 제한 회피)
+      // 1. 새 피치덱 파일이 선택된 경우 업로드 처리
       if (selectedFile) {
         setLoadingStatus(isKo ? "자료 업로드 중..." : "Uploading deck...");
         let uploadedUrl = "";
@@ -597,7 +606,6 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
 
       // 2. 가벼워진 텍스트 데이터만 Server Action으로 전송하여 DB 저장
       setLoadingStatus(isKo ? "저장 중..." : "Saving...");
-      const formData = new FormData(e.currentTarget);
 
       // 대용량 파일 데이터는 제외하여 Server Action 1MB 초과 및 타임아웃 방지
       formData.delete("pitchDeckFile");
@@ -625,7 +633,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
   const isOthersSelected = selectedIndustry === tx.othersValue || selectedIndustry === "기타 (Others)" || selectedIndustry === "Others";
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-24 font-pretendard text-left space-y-6 md:space-y-8">
+    <form ref={formRef} onSubmit={handleSubmit} className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-24 font-pretendard text-left space-y-6 md:space-y-8">
 
       {/* ─── 헤더 ─── */}
       <div className="bg-white rounded-[24px] md:rounded-[40px] p-5 md:p-8 shadow-lg border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
