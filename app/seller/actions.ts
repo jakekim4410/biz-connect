@@ -263,11 +263,24 @@ export async function saveOnePager(formData: FormData) {
   let pitchDeckUrl = formData.get("pitchDeckUrl") as string;
 
   if (file && file.size > 0) {
-    const fileExt = file.name.split('.').pop();
-    const safeName = file.name.replace(/[^\x00-\x7F]/g, "").replace(/\s/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
-    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.${fileExt}`;
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || (file.type && file.type.includes('pdf'));
+    if (!isPdf) {
+      return { error: "PDF 파일만 업로드 가능합니다." };
+    }
+
+    const lastDotIndex = file.name.lastIndexOf('.');
+    const baseName = lastDotIndex !== -1 ? file.name.substring(0, lastDotIndex) : file.name;
+    const safeName = baseName
+      .replace(/[^\x00-\x7F]/g, "")
+      .replace(/\s/g, "_")
+      .replace(/[^a-zA-Z0-9_-]/g, "");
+
+    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.pdf`;
     
-    const { error: uploadError } = await supabase.storage.from('pitchdecks').upload(filename, file, { upsert: true });
+    const { error: uploadError } = await supabase.storage.from('pitchdecks').upload(filename, file, { 
+      contentType: 'application/pdf',
+      upsert: true 
+    });
     if (uploadError) return { error: "파일 업로드 실패" };
     
     const { data: { publicUrl } } = supabase.storage.from('pitchdecks').getPublicUrl(filename);

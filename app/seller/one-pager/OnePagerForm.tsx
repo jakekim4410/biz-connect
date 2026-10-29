@@ -506,7 +506,10 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== "application/pdf") {
+      const isPdfType = file.type === "application/pdf" || file.type.includes("pdf");
+      const isPdfExtension = file.name.toLowerCase().endsWith(".pdf");
+
+      if (!isPdfType && !isPdfExtension) {
         alert(isKo ? "PDF 파일만 업로드 가능합니다. (PDF Only)" : "Only PDF files are allowed.");
         e.target.value = "";
         setSelectedFileName(null);
@@ -839,7 +842,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
                   <input
                     type="file"
                     name="pitchDeckFile"
-                    accept=".pdf"
+                    accept=".pdf,application/pdf"
                     onChange={handleFileChange}
                     className="absolute inset-0 opacity-0 cursor-pointer z-20 w-full"
                   />

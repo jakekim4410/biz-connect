@@ -48,17 +48,26 @@ export async function saveOnePager(formData: FormData) {
 
   // 1. 파일 업로드 로직
   if (file && file.size > 0) {
-    const fileExt = file.name.split('.').pop();
-    const safeName = file.name
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || (file.type && file.type.includes('pdf'));
+    if (!isPdf) {
+      return { error: locale === "ko" ? "PDF 파일만 업로드 가능합니다." : "Only PDF files are allowed." };
+    }
+
+    const lastDotIndex = file.name.lastIndexOf('.');
+    const baseName = lastDotIndex !== -1 ? file.name.substring(0, lastDotIndex) : file.name;
+    const safeName = baseName
       .replace(/[^\x00-\x7F]/g, "")
       .replace(/\s/g, "_")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
+      .replace(/[^a-zA-Z0-9_-]/g, "");
 
-    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.${fileExt}`;
+    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.pdf`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('pitchdecks')
-      .upload(filename, file, { upsert: true });
+      .upload(filename, file, { 
+        contentType: 'application/pdf',
+        upsert: true 
+      });
 
     if (uploadError) {
       console.error("파일 업로드 에러:", uploadError.message);
