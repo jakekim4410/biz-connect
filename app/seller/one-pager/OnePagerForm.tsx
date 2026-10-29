@@ -1,6 +1,6 @@
 "use client"
 
-import { saveOnePager } from "./actions";
+import { saveOnePager, getPitchDeckUploadUrl } from "./actions";
 import { useState, useRef, useEffect } from "react";
 import { 
   Upload, FileCheck, Loader2, ChevronLeft, ChevronDown, Sparkles, 
@@ -437,7 +437,9 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
   const INDUSTRY_CATEGORIES = isKo ? INDUSTRY_CATEGORIES_KO : INDUSTRY_CATEGORIES_EN;
 
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const router = useRouter();
 
   // ─── 데이터 매핑 (서버에서 받은 스키마 구조와 1:1 매칭) ───
@@ -513,30 +515,90 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
         alert(isKo ? "PDF 파일만 업로드 가능합니다. (PDF Only)" : "Only PDF files are allowed.");
         e.target.value = "";
         setSelectedFileName(null);
+        setSelectedFile(null);
         return;
       }
       if (file.size > 50 * 1024 * 1024) {
         alert(isKo ? "파일 용량은 50MB를 초과할 수 없습니다. (Max 50MB)" : "File size must not exceed 50MB.");
         e.target.value = "";
         setSelectedFileName(null);
+        setSelectedFile(null);
         return;
       }
       setSelectedFileName(file.name);
+      setSelectedFile(file);
+    } else {
+      setSelectedFileName(null);
+      setSelectedFile(null);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const res = await saveOnePager(formData);
-    setLoading(false);
+    setLoadingStatus(isKo ? "저장 준비 중..." : "Preparing...");
 
-    if (res.success) {
-      alert(tx.successMsg);
-      router.push("/seller");
-    } else {
-      alert(res.error);
+    try {
+      let finalPitchDeckUrl = (initialData?.pitchDeckUrl as string) || "";
+
+      // 1. 새 피치덱 파일이 선택된 경우: 브라우저에서 Supabase Storage로 직접 업로드 (Server Action 페이로드 1MB/4.5MB 제한 회피)
+      if (selectedFile) {
+        setLoadingStatus(isKo ? "자료 업로드 중..." : "Uploading deck...");
+
+        const uploadInfo = await getPitchDeckUploadUrl(selectedFile.name);
+        if (!uploadInfo.success || !uploadInfo.signedUrl) {
+          throw new Error(uploadInfo.error || (isKo ? "업로드 URL을 발급받지 못했습니다." : "Failed to get upload URL."));
+        }
+
+        const uploadFormData = new FormData();
+        uploadFormData.append("cacheControl", "3600");
+        uploadFormData.append("", selectedFile, selectedFile.name);
+
+        const uploadRes = await fetch(uploadInfo.signedUrl, {
+          method: "PUT",
+          headers: {
+            "x-upsert": "true",
+          },
+          body: uploadFormData,
+        });
+
+        if (!uploadRes.ok) {
+          const errDetail = await uploadRes.text();
+          console.error("Direct upload failed:", uploadRes.status, errDetail);
+          throw new Error(
+            isKo
+              ? "파일 업로드 중 오류가 발생했습니다. 네트워크 상태 확인 후 다시 시도해 주세요."
+              : "Failed to upload file to storage. Please try again."
+          );
+        }
+
+        finalPitchDeckUrl = uploadInfo.publicUrl;
+      }
+
+      // 2. 가벼워진 텍스트 데이터만 Server Action으로 전송하여 DB 저장
+      setLoadingStatus(isKo ? "저장 중..." : "Saving...");
+      const formData = new FormData(e.currentTarget);
+
+      // 대용량 파일 데이터는 제외하여 Server Action 1MB 초과 및 타임아웃 방지
+      formData.delete("pitchDeckFile");
+      if (finalPitchDeckUrl) {
+        formData.set("pitchDeckUrl", finalPitchDeckUrl);
+      }
+
+      const res = await saveOnePager(formData);
+
+      if (res.success) {
+        alert(tx.successMsg);
+        router.push("/seller");
+      } else {
+        alert(res.error || (isKo ? "저장에 실패했습니다." : "Save failed."));
+      }
+    } catch (err: any) {
+      console.error("저장 에러:", err);
+      alert(err.message || (isKo ? "저장 처리 중 오류가 발생했습니다." : "An error occurred during save."));
+    } finally {
+      setLoading(false);
+      setLoadingStatus("");
     }
   };
 
@@ -571,7 +633,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
             className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-[16px] md:rounded-2xl bg-slate-900 text-white font-black text-xs md:text-sm hover:bg-indigo-600 active:scale-95 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50"
           >
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-            {tx.save}{tx.saveSub && <span className="font-bold opacity-70 hidden sm:inline"> {tx.saveSub}</span>}
+            {loading ? <span>{loadingStatus || tx.save}</span> : <>{tx.save}{tx.saveSub && <span className="font-bold opacity-70 hidden sm:inline"> {tx.saveSub}</span>}</>}
           </button>
         </div>
       </div>
@@ -839,6 +901,7 @@ export default function OnePagerForm({ initialData }: { initialData?: any }) {
               <div className="pt-6 border-t border-slate-800">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">{tx.pitchDeck}</label>
                 <div className="relative group overflow-hidden">
+                  <input type="hidden" name="pitchDeckUrl" value={initialData?.pitchDeckUrl || ""} />
                   <input
                     type="file"
                     name="pitchDeckFile"

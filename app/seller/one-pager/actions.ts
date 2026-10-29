@@ -33,6 +33,63 @@ const ERROR_MSG = {
   },
 } as const;
 
+/**
+ * 대용량(최대 50MB) 피치덱 파일을 브라우저에서 Supabase Storage로 직접 업로드할 수 있도록
+ * 사전 서명된 업로드 URL(Signed Upload URL)을 발급합니다.
+ * Next.js Server Action의 1MB 제한 및 서버리스 타임아웃/페이로드 한도를 우회합니다.
+ */
+export async function getPitchDeckUploadUrl(originalFilename: string) {
+  const session = await getServerSession(authOptions);
+  const locale = await getLocale();
+  const msg = ERROR_MSG[locale];
+
+  if (!session?.user || (session.user as any).role !== "SELLER") {
+    return { success: false, error: msg.noPermission };
+  }
+
+  const userId = Number((session.user as any).id);
+  const isPdf = originalFilename.toLowerCase().endsWith(".pdf");
+  if (!isPdf) {
+    return { 
+      success: false, 
+      error: locale === "ko" ? "PDF 파일만 업로드 가능합니다." : "Only PDF files are allowed." 
+    };
+  }
+
+  const lastDotIndex = originalFilename.lastIndexOf(".");
+  const baseName = lastDotIndex !== -1 ? originalFilename.substring(0, lastDotIndex) : originalFilename;
+  const safeName = baseName
+    .replace(/[^\x00-\x7F]/g, "")
+    .replace(/\s/g, "_")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const filename = `${userId}_${Date.now()}_${safeName || "pitchdeck"}.pdf`;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from("pitchdecks")
+      .createSignedUploadUrl(filename, { upsert: true });
+
+    if (error || !data) {
+      console.error("Signed URL 생성 에러:", error?.message);
+      return { success: false, error: msg.uploadFail + (error?.message || "Failed to create upload URL") };
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from("pitchdecks").getPublicUrl(filename);
+
+    return {
+      success: true,
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path: filename,
+      publicUrl,
+    };
+  } catch (err: any) {
+    console.error("Signed URL 예외 발생:", err);
+    return { success: false, error: msg.uploadFail + (err?.message || "Storage error") };
+  }
+}
+
 export async function saveOnePager(formData: FormData) {
   const session = await getServerSession(authOptions);
   const locale = await getLocale();
@@ -43,39 +100,45 @@ export async function saveOnePager(formData: FormData) {
   }
 
   const userId = Number((session.user as any).id);
-  const file = formData.get("pitchDeckFile") as File;
-  let pitchDeckUrl = formData.get("pitchDeckUrl") as string;
+  const file = formData.get("pitchDeckFile") as File | null;
+  let pitchDeckUrl = (formData.get("pitchDeckUrl") as string) || "";
 
-  // 1. 파일 업로드 로직
-  if (file && file.size > 0) {
-    const isPdf = file.name.toLowerCase().endsWith('.pdf') || (file.type && file.type.includes('pdf'));
+  // 1. 파일 업로드 로직 (클라이언트에서 직접 업로드되지 않고 파일이 넘어온 경우의 Fallback)
+  if (file && typeof file !== "string" && file.size > 0) {
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || (file.type && file.type.includes("pdf"));
     if (!isPdf) {
       return { error: locale === "ko" ? "PDF 파일만 업로드 가능합니다." : "Only PDF files are allowed." };
     }
 
-    const lastDotIndex = file.name.lastIndexOf('.');
+    const lastDotIndex = file.name.lastIndexOf(".");
     const baseName = lastDotIndex !== -1 ? file.name.substring(0, lastDotIndex) : file.name;
     const safeName = baseName
       .replace(/[^\x00-\x7F]/g, "")
       .replace(/\s/g, "_")
       .replace(/[^a-zA-Z0-9_-]/g, "");
 
-    const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.pdf`;
+    const filename = `${userId}_${Date.now()}_${safeName || "pitchdeck"}.pdf`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('pitchdecks')
-      .upload(filename, file, { 
-        contentType: 'application/pdf',
-        upsert: true 
-      });
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("pitchdecks")
+        .upload(filename, buffer, { 
+          contentType: "application/pdf",
+          upsert: true 
+        });
 
-    if (uploadError) {
-      console.error("파일 업로드 에러:", uploadError.message);
-      return { error: msg.uploadFail + uploadError.message };
+      if (uploadError) {
+        console.error("파일 업로드 에러:", uploadError.message);
+        return { error: msg.uploadFail + uploadError.message };
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from("pitchdecks").getPublicUrl(filename);
+      pitchDeckUrl = publicUrl;
+    } catch (uploadException: any) {
+      console.error("서버 업로드 예외:", uploadException);
+      return { error: msg.uploadFail + (uploadException?.message || "") };
     }
-
-    const { data: { publicUrl } } = supabase.storage.from('pitchdecks').getPublicUrl(filename);
-    pitchDeckUrl = publicUrl;
   }
 
   // 현재 유저의 회사 정보를 먼저 가져옵니다.
@@ -110,9 +173,9 @@ export async function saveOnePager(formData: FormData) {
   // B. 가입자 본인만 가질 '개인 담당자 정보'
   const personalPicData = {
     picName:      (formData.get("picName")      as string) || "",
-    picNameEn:    (formData.get("picNameEn")    as string) || "",   // ✅ 추가
+    picNameEn:    (formData.get("picNameEn")    as string) || "",
     picTitle:     (formData.get("picTitle")     as string) || "",
-    picTitleEn:   (formData.get("picTitleEn")   as string) || "",   // ✅ 추가
+    picTitleEn:   (formData.get("picTitleEn")   as string) || "",
     contactEmail: (formData.get("contactEmail") as string) || "",
   };
 

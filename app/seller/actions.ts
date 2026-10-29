@@ -277,7 +277,8 @@ export async function saveOnePager(formData: FormData) {
 
     const filename = `${userId}_${Date.now()}_${safeName || 'pitchdeck'}.pdf`;
     
-    const { error: uploadError } = await supabase.storage.from('pitchdecks').upload(filename, file, { 
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { error: uploadError } = await supabase.storage.from('pitchdecks').upload(filename, buffer, { 
       contentType: 'application/pdf',
       upsert: true 
     });
