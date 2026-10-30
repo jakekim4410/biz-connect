@@ -30,7 +30,7 @@ export async function createSlotAction(formData: FormData, buyerId: number) {
   const location = formData.get("location") as string;
   const description = formData.get("description") as string;
 
-  const startTime = new Date(`${date}T${hour}:${minute}:00`);
+  const startTime = new Date(`${date}T${hour}:${minute}:00Z`);
   const endTime = new Date(startTime.getTime() + 30 * 60000);
 
   const existing = await db.timeSlot.findFirst({
@@ -60,7 +60,7 @@ export async function updateSlotAction(slotId: number, formData: FormData) {
   const location = formData.get("location") as string;
   const description = formData.get("description") as string;
 
-  const startTime = new Date(`${date}T${hour}:${minute}:00`);
+  const startTime = new Date(`${date}T${hour}:${minute}:00Z`);
   const endTime = new Date(startTime.getTime() + 30 * 60000);
 
   const currentSlot = await db.timeSlot.findUnique({ where: { id: slotId } });
@@ -144,6 +144,7 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
 
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'UTC',
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       }).format(confirmedMeeting.timeSlot.startTime);
@@ -321,6 +322,7 @@ export async function acceptDirectMeetingAction(meetingId: number, slotId: numbe
     // 2. 매칭 확정 이메일 발송
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'UTC',
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       }).format(confirmedMeeting.timeSlot.startTime);

@@ -404,7 +404,7 @@ export async function createSellerSlotAction(formData: FormData, sellerId: numbe
   const location = formData.get("location") as string;
   const description = formData.get("description") as string;
 
-  const startTime = new Date(`${date}T${hour}:${minute}:00`);
+  const startTime = new Date(`${date}T${hour}:${minute}:00Z`);
   const endTime = new Date(startTime.getTime() + 30 * 60000);
 
   const existing = await db.timeSlot.findFirst({
@@ -434,7 +434,7 @@ export async function updateSellerSlotAction(slotId: number, formData: FormData)
   const location = formData.get("location") as string;
   const description = formData.get("description") as string;
 
-  const startTime = new Date(`${date}T${hour}:${minute}:00`);
+  const startTime = new Date(`${date}T${hour}:${minute}:00Z`);
   const endTime = new Date(startTime.getTime() + 30 * 60000);
 
   const currentSlot = await db.timeSlot.findUnique({ where: { id: slotId } });
@@ -524,6 +524,7 @@ export async function handleSellerSlotStatusAction(
 
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'UTC',
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       }).format(confirmedMeeting.timeSlot.startTime);
@@ -588,6 +589,7 @@ export async function acceptDirectMeetingAsSellerAction(meetingId: number, slotI
 
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'UTC',
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       }).format(confirmedMeeting.timeSlot.startTime);
@@ -666,6 +668,7 @@ export async function acceptDirectMeetingWithNewSlotAction(
 
     if (confirmedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'UTC',
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       }).format(confirmedMeeting.timeSlot.startTime);

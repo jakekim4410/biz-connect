@@ -218,18 +218,20 @@ export default function BuyerClient({
   }, []);
 
   const formatDateWithDay = (dateString: string) => {
+    if (!dateString) return "-";
     const d = new Date(dateString);
     const dateLocale = locale === "ko" ? 'ko-KR' : 'en-US';
-    const datePart = d.toLocaleDateString(dateLocale, { year: 'numeric', month: 'numeric', day: 'numeric' });
-    const dayPart = d.toLocaleDateString(dateLocale, { weekday: 'short' });
+    const datePart = d.toLocaleDateString(dateLocale, { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
+    const dayPart = d.toLocaleDateString(dateLocale, { timeZone: 'UTC', weekday: 'short' });
     return `${datePart} (${dayPart})`;
   };
 
   const formatTime24And12 = (dateString: string) => {
+    if (!dateString) return "-";
     const d = new Date(dateString);
     const dateLocale = locale === "ko" ? 'ko-KR' : 'en-US';
-    const time24 = d.toLocaleTimeString(dateLocale, { hour12: false, hour: '2-digit', minute: '2-digit' });
-    const time12 = d.toLocaleTimeString(dateLocale, { hour12: true, hour: '2-digit', minute: '2-digit' });
+    const time24 = d.toLocaleTimeString(dateLocale, { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit' });
+    const time12 = d.toLocaleTimeString(dateLocale, { timeZone: 'UTC', hour12: true, hour: '2-digit', minute: '2-digit' });
     return `${time24} (${time12})`;
   };
 
@@ -480,8 +482,8 @@ export default function BuyerClient({
     const data = confirmedMeetings.map((m: any) => {
       const meetingDate = new Date(m.timeSlot.startTime);
       return {
-        [isEn ? "Meeting Date" : "미팅 일자 (Meeting Date)"]: meetingDate.toLocaleDateString(isEn ? 'en-US' : 'ko-KR'),
-        [isEn ? "Meeting Time" : "미팅 시간 (Meeting Time)"]: meetingDate.toLocaleTimeString(isEn ? 'en-US' : 'ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        [isEn ? "Meeting Date" : "미팅 일자 (Meeting Date)"]: meetingDate.toLocaleDateString(isEn ? 'en-US' : 'ko-KR', { timeZone: 'UTC' }),
+        [isEn ? "Meeting Time" : "미팅 시간 (Meeting Time)"]: meetingDate.toLocaleTimeString(isEn ? 'en-US' : 'ko-KR', { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit' }),
         [isEn ? "Status" : "상태 (Status)"]: meetingDate < new Date() ? (isEn ? "Completed" : "종료됨 (Completed)") : (isEn ? "Upcoming" : "예정됨 (Upcoming)"),
         [isEn ? "Location" : "장소 (Location)"]: m.location || (isEn ? "TBD" : "미지정 (TBD)"),
         [isEn ? "Company Name" : "업체명 (Company Name)"]: isEn ? (m.seller.companyNameEn || m.seller.companyName) : m.seller.companyName,
@@ -2768,10 +2770,9 @@ export default function BuyerClient({
               <form onSubmit={handleUpdateSlot} className="space-y-5">
                 {(() => {
                   const d = new Date(editingSlot.startTime);
-                  const offset = d.getTimezoneOffset() * 60000;
-                  const defaultDate = new Date(d.getTime() - offset).toISOString().split('T')[0];
-                  const defaultHour = String(d.getHours()).padStart(2, '0');
-                  const defaultMinute = String(d.getMinutes()).padStart(2, '0');
+                  const defaultDate = d.toISOString().split('T')[0];
+                  const defaultHour = String(d.getUTCHours()).padStart(2, '0');
+                  const defaultMinute = String(d.getUTCMinutes()).padStart(2, '0');
                   const hasRequests = editingSlot.meetings?.filter((m: any) => m.status !== 'REJECTED').length > 0;
                   return (
                     <>
@@ -3327,7 +3328,7 @@ export default function BuyerClient({
                         />
                         <div className="flex flex-col">
                           <span className="font-black text-slate-700">
-                            {formatDateWithDay(slot.startTime)} {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatDateWithDay(slot.startTime)} {new Date(slot.startTime).toLocaleTimeString([], { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} - {new Date(slot.endTime).toLocaleTimeString([], { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })}
                           </span>
                           {slot.location && slot.location !== TBA_VALUE && <span className="text-[10px] text-slate-500 font-bold">{slot.location}</span>}
                         </div>

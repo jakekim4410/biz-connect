@@ -40,7 +40,7 @@ export default function AdminClient({ stats, users, timeSlots, meetings }: any) 
   useEffect(() => setMounted(true), []);
 
   const formatDate = (date: any) => date ? new Date(date).toISOString().split('T')[0] : "";
-  const formatTime = (date: any) => date ? new Date(date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : "";
+  const formatTime = (date: any) => date ? new Date(date).toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }) : "";
 
   // 통계 계산 (Dashboard 시각화용)
   const analytics = useMemo(() => {

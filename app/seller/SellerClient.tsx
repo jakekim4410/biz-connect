@@ -1056,8 +1056,8 @@ export default function SellerClient({
     if (!dateString) return "-";
     const d = new Date(dateString);
     const dLocale = isEn ? 'en-US' : 'ko-KR';
-    const datePart = d.toLocaleDateString(dLocale, { year: 'numeric', month: 'numeric', day: 'numeric' });
-    const dayPart = d.toLocaleDateString(dLocale, { weekday: 'short' });
+    const datePart = d.toLocaleDateString(dLocale, { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
+    const dayPart = d.toLocaleDateString(dLocale, { timeZone: 'UTC', weekday: 'short' });
     return `${datePart} (${dayPart})`;
   };
 
@@ -1065,8 +1065,8 @@ export default function SellerClient({
     if (!dateString) return "-";
     const d = new Date(dateString);
     const dLocale = isEn ? 'en-US' : 'ko-KR';
-    const time24 = d.toLocaleTimeString(dLocale, { hour12: false, hour: '2-digit', minute: '2-digit' });
-    const time12 = d.toLocaleTimeString(dLocale, { hour12: true, hour: '2-digit', minute: '2-digit' });
+    const time24 = d.toLocaleTimeString(dLocale, { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit' });
+    const time12 = d.toLocaleTimeString(dLocale, { timeZone: 'UTC', hour12: true, hour: '2-digit', minute: '2-digit' });
     return `${time24} (${time12})`;
   };
 
@@ -1145,10 +1145,10 @@ export default function SellerClient({
 
   const formatMeetingTime = (date: Date) => {
     const d = new Date(date);
-    const h24 = d.getHours().toString().padStart(2, '0');
-    const min = d.getMinutes().toString().padStart(2, '0');
+    const h24 = d.getUTCHours().toString().padStart(2, '0');
+    const min = d.getUTCMinutes().toString().padStart(2, '0');
     const dLocale = isEn ? 'en-US' : 'ko-KR';
-    const ampm = d.toLocaleTimeString(dLocale, { hour: '2-digit', minute: '2-digit', hour12: true });
+    const ampm = d.toLocaleTimeString(dLocale, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: true });
     return `${h24}:${min} (${ampm})`;
   };
 
@@ -1158,7 +1158,7 @@ export default function SellerClient({
       return;
     }
     const excelData = confirmedMeetings.map((m: any) => ({
-      "Date": new Date(m.timeSlot.startTime).toLocaleDateString(),
+      "Date": new Date(m.timeSlot.startTime).toLocaleDateString(isEn ? 'en-US' : 'ko-KR', { timeZone: 'UTC' }),
       "Time": formatMeetingTime(new Date(m.timeSlot.startTime)),
       "Location": m.location || (isEn ? "TBD" : "미정"),
       "Buyer": displayCompanyName(m.buyer),
@@ -3562,17 +3562,17 @@ export default function SellerClient({
                       </div>
                       <div className="space-y-2">
                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Hour" : "시간"}</label>
-                        <select name="hour" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getHours()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
+                        <select name="hour" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getUTCHours()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
                           {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}시</option>)}
                         </select>
-                        {hasMatch && <input type="hidden" name="hour" defaultValue={String(new Date(editingSellerSlot.startTime).getHours()).padStart(2, '0')} />}
+                        {hasMatch && <input type="hidden" name="hour" defaultValue={String(new Date(editingSellerSlot.startTime).getUTCHours()).padStart(2, '0')} />}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isEn ? "Min" : "분"}</label>
-                        <select name="minute" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getMinutes()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
+                        <select name="minute" disabled={hasMatch} defaultValue={String(new Date(editingSellerSlot.startTime).getUTCMinutes()).padStart(2, '0')} className={`w-full p-4 rounded-2xl border border-transparent outline-none font-bold text-sm transition-all ${hasMatch ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:border-emerald-500'}`}>
                           {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}분</option>)}
                         </select>
-                        {hasMatch && <input type="hidden" name="minute" defaultValue={String(new Date(editingSellerSlot.startTime).getMinutes()).padStart(2, '0')} />}
+                        {hasMatch && <input type="hidden" name="minute" defaultValue={String(new Date(editingSellerSlot.startTime).getUTCMinutes()).padStart(2, '0')} />}
                       </div>
                     </div>
                   </>

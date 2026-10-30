@@ -165,7 +165,7 @@ export async function updateMeetingLocation(meetingId: number, location: string)
 
 export async function updateMeetingDateTime(slotId: number, dateStr: string, timeStr: string) {
   try {
-    const newDateTime = new Date(`${dateStr}T${timeStr}:00`);
+    const newDateTime = new Date(`${dateStr}T${timeStr}:00Z`);
 
     await db.timeSlot.update({
       where: { id: slotId },
