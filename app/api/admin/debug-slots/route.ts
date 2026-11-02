@@ -12,78 +12,71 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
 
-    // 1. User 81 정보
-    const user81 = await db.user.findUnique({
-      where: { id: 81 },
-      include: { timeSlots: true }
-    });
-
-    // 2. 슬롯 76, 77 정보
-    const slots7677 = await db.timeSlot.findMany({
-      where: { id: { in: [76, 77] } },
-      include: {
-        buyer: true,
-        seller: true,
-        meetings: {
-          include: { seller: true }
-        }
+    // Check user 71, 79, 81
+    const users = await db.user.findMany({
+      where: { id: { in: [71, 78, 79, 81] } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        companyName: true,
+        companyNameEn: true,
+        approvalStatus: true
       }
     });
 
-    // 3. 최근 생성된 TimeSlots (id >= 70)
-    const recentSlots = await db.timeSlot.findMany({
-      where: { id: { gte: 70 } },
-      include: {
-        buyer: true,
-        meetings: true
-      },
-      orderBy: { id: "asc" }
-    });
+    // Check availableSlots query for seller 71 and seller 79
+    const getAvailableSlotsForSeller = async (sellerId: number) => {
+      return await db.timeSlot.findMany({
+        where: {
+          slotOwner: "BUYER",
+          status: "OPEN",
+          startTime: { gt: now },
+          NOT: { meetings: { some: { sellerId } } }
+        },
+        include: {
+          buyer: true,
+          meetings: { include: { seller: true } }
+        },
+        orderBy: { startTime: 'asc' }
+      });
+    };
 
-    // 4. 셀러 관점에서 availableSlots 쿼리 실행
-    const availableSlotsQuery = await db.timeSlot.findMany({
-      where: {
-        slotOwner: "BUYER",
-        status: "OPEN",
-        startTime: { gt: now }
-      },
-      include: {
-        buyer: true,
-        meetings: { include: { seller: true } }
-      },
-      orderBy: { startTime: 'asc' }
-    });
+    const slotsFor71 = await getAvailableSlotsForSeller(71);
+    const slotsFor79 = await getAvailableSlotsForSeller(79);
 
-    // 5. 셀러 목록 (간단히 상위 5명)
-    const sellers = await db.user.findMany({
-      where: { role: "SELLER" },
-      select: { id: true, email: true, companyName: true, approvalStatus: true },
-      take: 5
-    });
+    // Grouping simulation (like in SellerClient.tsx)
+    const groupByCompany = (slots: any[]) => {
+      const map = new Map<string, any[]>();
+      for (const slot of slots) {
+        const key = slot.buyer?.companyName || "unknown";
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(slot);
+      }
+      return Array.from(map.entries()).map(([companyName, s]) => ({
+        companyName,
+        buyerName: s[0]?.buyer?.name,
+        buyerEmail: s[0]?.buyer?.email,
+        buyerId: s[0]?.buyer?.id,
+        count: s.length,
+        slotIds: s.map((x: any) => x.id)
+      }));
+    };
 
     return NextResponse.json({
       success: true,
-      serverTime: now.toISOString(),
-      user81,
-      slots7677,
-      recentSlotsCount: recentSlots.length,
-      recentSlots: recentSlots.map(s => ({
-        id: s.id,
-        startTime: s.startTime.toISOString(),
-        endTime: s.endTime.toISOString(),
-        status: s.status,
-        slotOwner: s.slotOwner,
-        buyerId: s.buyerId,
-        buyerCompanyName: s.buyer?.companyName,
-        buyerApprovalStatus: s.buyer?.approvalStatus,
-        meetingsCount: s.meetings.length
-      })),
-      availableSlotsTotal: availableSlotsQuery.length,
-      availableSlotIds: availableSlotsQuery.map(s => s.id),
-      sellers
+      users,
+      seller71: {
+        totalAvailable: slotsFor71.length,
+        groups: groupByCompany(slotsFor71)
+      },
+      seller79: {
+        totalAvailable: slotsFor79.length,
+        groups: groupByCompany(slotsFor79)
+      }
     });
   } catch (err: any) {
-    console.error("Debug slots error:", err);
-    return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
