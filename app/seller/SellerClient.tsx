@@ -3484,14 +3484,17 @@ export default function SellerClient({
 
       {/* ─── 셀러 슬롯 신청 검토 모달 ─── */}
       {reviewingSellerMeeting && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setReviewingSellerMeeting(null)} />
-          <div className="bg-white rounded-[32px] shadow-2xl relative w-full max-w-lg z-10 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-white rounded-[28px] sm:rounded-[32px] shadow-2xl relative w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] flex flex-col z-10 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* 고정 상단 헤더 */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h3 className="text-lg font-black text-slate-800">{t.seller.slotManagement.reviewModalTitle}</h3>
               <button onClick={() => setReviewingSellerMeeting(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><XIcon size={20} /></button>
             </div>
-            <div className="p-6 space-y-5">
+
+            {/* 스크롤 가능한 본문 영역 */}
+            <div className="p-5 sm:p-6 space-y-4 sm:space-y-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
               {/* 슬롯 정보 */}
               <div className="bg-slate-50 rounded-[20px] p-4 space-y-2">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isEn ? "Slot Info" : "슬롯 정보"}</p>
@@ -3518,18 +3521,22 @@ export default function SellerClient({
                 {reviewingSellerMeeting.meeting.proposal && (
                   <div className="mt-2 bg-white/70 rounded-xl p-3">
                     <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">{isEn ? "Proposal" : "제안 내용"}</p>
-                    <p className="text-sm text-slate-700 font-medium italic">"{reviewingSellerMeeting.meeting.proposal}"</p>
+                    <div className="max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                      <p className="text-sm text-slate-700 font-medium italic whitespace-pre-wrap break-words">"{reviewingSellerMeeting.meeting.proposal}"</p>
+                    </div>
                   </div>
                 )}
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => handleApproveSellerMatch(reviewingSellerMeeting.slot, reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  <Check size={16} />{t.seller.slotManagement.acceptBtn}
-                </button>
-                <button type="button" onClick={() => handleRejectSellerMatch(reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-[18px] font-black text-sm hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  <XIcon size={16} />{t.seller.slotManagement.rejectBtn}
-                </button>
-              </div>
+            </div>
+
+            {/* 하단 고정 액션 버튼 바 */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.03)]">
+              <button type="button" onClick={() => handleApproveSellerMatch(reviewingSellerMeeting.slot, reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-emerald-600 text-white rounded-[18px] font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                <Check size={16} />{t.seller.slotManagement.acceptBtn}
+              </button>
+              <button type="button" onClick={() => handleRejectSellerMatch(reviewingSellerMeeting.meeting)} disabled={isPending} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-[18px] font-black text-sm hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                <XIcon size={16} />{t.seller.slotManagement.rejectBtn}
+              </button>
             </div>
           </div>
         </div>

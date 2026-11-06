@@ -2941,42 +2941,47 @@ export default function BuyerClient({
 
       {/* ── 매칭 검토 모달 ── */}
       {reviewingMeeting && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 md:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in zoom-in-95">
-          <div className="bg-white w-full max-w-lg rounded-[32px] md:rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border border-white/20">
-            <div className="bg-slate-900 px-6 md:px-8 py-5 md:py-6 flex justify-between items-center text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in zoom-in-95">
+          <div className="bg-white w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] rounded-[28px] sm:rounded-[36px] shadow-2xl relative overflow-hidden flex flex-col border border-white/20">
+            {/* 고정 상단 헤더 */}
+            <div className="bg-slate-900 px-6 sm:px-8 py-4 sm:py-5 flex justify-between items-center text-white relative overflow-hidden shrink-0">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
               <div className="relative z-10">
-                <h3 className="text-lg md:text-xl font-black flex items-center gap-2"><Search size={20} className="text-indigo-400" /> {t.buyer.pending.reviewBtn}</h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">{isEn ? 'Review Meeting Request' : '미팅 요청 검토'}</p>
+                <h3 className="text-lg sm:text-xl font-black flex items-center gap-2"><Search size={20} className="text-indigo-400" /> {t.buyer.pending.reviewBtn}</h3>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">{isEn ? 'Review Meeting Request' : '미팅 요청 검토'}</p>
               </div>
               <button onClick={() => setReviewingMeeting(null)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors relative z-10"><X size={20} /></button>
             </div>
-            <div className="p-6 md:p-8 space-y-5 md:space-y-6">
-              <div className="bg-slate-50 rounded-[24px] md:rounded-[25px] p-5 md:p-6 border border-slate-100 flex items-start gap-4">
-                <div className="w-12 h-12 bg-white rounded-[16px] shadow-sm border border-slate-100 flex items-center justify-center text-indigo-500 shrink-0"><Building2 size={24} /></div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <h4 className="text-lg font-black text-slate-900">
+
+            {/* 스크롤 가능한 본문 영역 */}
+            <div className="p-5 sm:p-7 space-y-4 sm:space-y-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              <div className="bg-slate-50 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 border border-slate-100 flex items-start gap-3.5 sm:gap-4">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white rounded-[16px] shadow-sm border border-slate-100 flex items-center justify-center text-indigo-500 shrink-0"><Building2 size={22} /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h4 className="text-base sm:text-lg font-black text-slate-900 truncate">
                       {isEn ? (reviewingMeeting.meeting.seller.companyNameEn || reviewingMeeting.meeting.seller.companyName) : reviewingMeeting.meeting.seller.companyName}
                     </h4>
-                    <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 border border-indigo-100">
+                    <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1 border border-indigo-100 shrink-0">
                       <UserIcon size={12} />
                       {isEn ? (reviewingMeeting.meeting.seller.nameEn || reviewingMeeting.meeting.seller.name) : reviewingMeeting.meeting.seller.name}
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md">{localizeIndustry(reviewingMeeting.meeting.seller.onePager?.industrySector, isEn) || "-"}</span>
-                  <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed italic">"{reviewingMeeting.meeting.seller.onePager?.solutionSummary || t.buyer.directory.noResults}"</p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md inline-block">{localizeIndustry(reviewingMeeting.meeting.seller.onePager?.industrySector, isEn) || "-"}</span>
+                  <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed italic">"{reviewingMeeting.meeting.seller.onePager?.solutionSummary || t.buyer.directory.noResults}"</p>
                 </div>
               </div>
 
               {reviewingMeeting.meeting.proposal && (
-                <div className="bg-indigo-50/50 p-5 border border-indigo-100 rounded-[20px] shadow-sm flex flex-col gap-2">
+                <div className="bg-indigo-50/50 p-4 sm:p-5 border border-indigo-100 rounded-[20px] shadow-sm flex flex-col gap-2">
                   <p className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5 opacity-80">
                     <FileText size={14} /> {isEn ? "Pre-proposal Message" : "사전 제안 메시지"}
                   </p>
-                  <p className="text-[13px] font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
-                    {reviewingMeeting.meeting.proposal}
-                  </p>
+                  <div className="max-h-52 sm:max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    <p className="text-[13px] font-bold text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
+                      {reviewingMeeting.meeting.proposal}
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -2985,20 +2990,22 @@ export default function BuyerClient({
                   const s = reviewingMeeting.meeting.seller;
                   setSelectedOnePager({ ...s.onePager, user: s, members: s.members || [s] });
                 }}
-                className="w-full py-4 bg-white border-2 border-indigo-100 text-indigo-600 font-black rounded-[20px] flex justify-center items-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-colors shadow-sm"
+                className="w-full py-3.5 sm:py-4 bg-white border-2 border-indigo-100 text-indigo-600 font-black rounded-[18px] sm:rounded-[20px] flex justify-center items-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-colors shadow-sm text-sm"
               >
                 <FileSearch size={18} /> {isEn ? "View Detailed One-Pager" : "기업 상세 프로필 확인 (One-Pager)"}
               </button>
-              <div className="bg-amber-50 border border-amber-100 text-amber-700 text-[11px] font-bold p-4 rounded-2xl flex items-start gap-2 leading-relaxed">
+              <div className="bg-amber-50 border border-amber-100 text-amber-700 text-[11px] font-bold p-3.5 sm:p-4 rounded-2xl flex items-start gap-2 leading-relaxed">
                 <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-500" />
                 <p>{isEn ? "Approving this will automatically reject others in the same slot." : "승인 시 동일 슬롯 대기 중인 다른 기업들은 '타기업 매칭' 사유로 자동 거절됩니다."}</p>
               </div>
             </div>
-            <div className="p-4 md:p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
-              <button onClick={() => handleRejectMatch(reviewingMeeting.meeting)} disabled={isPending} className="flex-1 py-4 bg-white text-rose-500 border border-slate-200 font-black rounded-[20px] flex justify-center items-center gap-2 hover:bg-rose-50 transition-colors disabled:opacity-50 shadow-sm">
+
+            {/* 하단 고정 액션 버튼 바 (항상 보임) */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.03)]">
+              <button onClick={() => handleRejectMatch(reviewingMeeting.meeting)} disabled={isPending} className="flex-1 py-3.5 sm:py-4 bg-white text-rose-500 border border-slate-200 font-black rounded-[18px] sm:rounded-[20px] flex justify-center items-center gap-2 hover:bg-rose-50 transition-colors disabled:opacity-50 shadow-sm text-sm">
                 <XCircle size={18} /> {isEn ? "Reject" : "거절"}
               </button>
-              <button onClick={() => handleApproveMatch(reviewingMeeting.slot, reviewingMeeting.meeting)} disabled={isPending} className="flex-[1.5] py-4 bg-emerald-500 text-white font-black rounded-[20px] shadow-lg shadow-emerald-200 flex justify-center items-center gap-2 hover:bg-emerald-600 transition-colors disabled:opacity-50">
+              <button onClick={() => handleApproveMatch(reviewingMeeting.slot, reviewingMeeting.meeting)} disabled={isPending} className="flex-[1.5] py-3.5 sm:py-4 bg-emerald-500 text-white font-black rounded-[18px] sm:rounded-[20px] shadow-lg shadow-emerald-200 flex justify-center items-center gap-2 hover:bg-emerald-600 transition-colors disabled:opacity-50 text-sm">
                 {isPending ? t.common.loading : <><Check size={18} /> {isEn ? "Confirm Match" : "매칭 확정"}</>}
               </button>
             </div>
