@@ -38,15 +38,22 @@ interface SendMeetingEmailParams {
   location: string;
   startTimeIso: string;
   endTimeIso: string;
+  buyerLocale?: string;
+  sellerLocale?: string;
 }
 
 export async function sendMeetingConfirmationEmails(params: SendMeetingEmailParams) {
   try {
+    const buyerIsEn = params.buyerLocale === "en";
+    const sellerIsEn = params.sellerLocale === "en";
+
     await Promise.all([
       resend.emails.send({
         from: FROM_EMAIL,
         to: params.buyerEmail, 
-        subject: `[BizConnect] ${params.sellerName}님과의 미팅이 확정되었습니다.`,
+        subject: buyerIsEn
+          ? `[BizConnect] Meeting confirmed with ${params.sellerName}`
+          : `[BizConnect] ${params.sellerName}님과의 미팅이 확정되었습니다.`,
         react: MeetingConfirmedEmail({
           recipientName: params.buyerName,
           partnerName: params.sellerName,
@@ -55,12 +62,15 @@ export async function sendMeetingConfirmationEmails(params: SendMeetingEmailPara
           startTimeIso: params.startTimeIso,
           endTimeIso: params.endTimeIso,
           role: "BUYER",
+          locale: params.buyerLocale || "ko",
         }),
       }),
       resend.emails.send({
         from: FROM_EMAIL,
         to: params.sellerEmail, 
-        subject: `[BizConnect] ${params.buyerName}님과의 미팅이 확정되었습니다.`,
+        subject: sellerIsEn
+          ? `[BizConnect] Meeting confirmed with ${params.buyerName}`
+          : `[BizConnect] ${params.buyerName}님과의 미팅이 확정되었습니다.`,
         react: MeetingConfirmedEmail({
           recipientName: params.sellerName,
           partnerName: params.buyerName,
@@ -69,6 +79,7 @@ export async function sendMeetingConfirmationEmails(params: SendMeetingEmailPara
           startTimeIso: params.startTimeIso,
           endTimeIso: params.endTimeIso,
           role: "SELLER",
+          locale: params.sellerLocale || "ko",
         }),
       }),
     ]);

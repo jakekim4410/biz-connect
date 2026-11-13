@@ -123,6 +123,7 @@ export async function updateMeetingStatus(id: number, status: string) {
     // 관리자가 상태를 CONFIRMED로 바꾼 경우에만 이메일 발송
     if (status === "CONFIRMED" && updatedMeeting.timeSlot?.startTime) {
       const meetingDateStr = new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "UTC",
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -140,6 +141,8 @@ export async function updateMeetingStatus(id: number, status: string) {
         location: updatedMeeting.location || updatedMeeting.timeSlot.location || "미지정",
         startTimeIso: updatedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: updatedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: updatedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: updatedMeeting.seller?.preferredLanguage || "ko",
       });
     }
 

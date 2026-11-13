@@ -158,6 +158,8 @@ export async function handleStatusAction(meetingId: number, slotId: number, acti
         location: confirmedMeeting.location || confirmedMeeting.timeSlot.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: confirmedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: confirmedMeeting.seller?.preferredLanguage || "ko",
       });
     }
 
@@ -336,6 +338,8 @@ export async function acceptDirectMeetingAction(meetingId: number, slotId: numbe
         location: confirmedMeeting.location || confirmedMeeting.timeSlot.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: confirmedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: confirmedMeeting.seller?.preferredLanguage || "ko",
       });
     }
 

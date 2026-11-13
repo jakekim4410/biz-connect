@@ -538,6 +538,8 @@ export async function handleSellerSlotStatusAction(
         location: confirmedMeeting.location || confirmedMeeting.timeSlot.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: confirmedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: confirmedMeeting.seller?.preferredLanguage || "ko",
       });
     }
   } else {
@@ -603,6 +605,8 @@ export async function acceptDirectMeetingAsSellerAction(meetingId: number, slotI
         location: confirmedMeeting.location || confirmedMeeting.timeSlot?.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: confirmedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: confirmedMeeting.seller?.preferredLanguage || "ko",
       });
     }
 
@@ -682,6 +686,8 @@ export async function acceptDirectMeetingWithNewSlotAction(
         location: confirmedMeeting.location || confirmedMeeting.timeSlot?.location || "미지정",
         startTimeIso: confirmedMeeting.timeSlot.startTime.toISOString(),
         endTimeIso: confirmedMeeting.timeSlot.endTime.toISOString(),
+        buyerLocale: confirmedMeeting.buyer?.preferredLanguage || "ko",
+        sellerLocale: confirmedMeeting.seller?.preferredLanguage || "ko",
       });
     }
 
